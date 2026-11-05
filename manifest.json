@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Éxodo",
+  "description": "Gestión abierta de títulos electrónicos ante la SEP",
+  "version": "1.0",
+  "permissions": ["storage"],
+  "host_permissions": ["https://met.sep.gob.mx/*"],
+  "background": {"service_worker": "background.js"},
+  "action": {"default_title": "Abrir Éxodo"},
+  "content_security_policy": {"extension_pages": "script-src 'self'; object-src 'self'"}
+}

@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="es">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#061856">
+  <title>Éxodo</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <header class="topbar">
+    <div class="title-block">
+      <h1 id="title">Cargar título electrónico</h1>
+      <p id="subtitle">Gestión abierta de títulos electrónicos ante la SEP</p>
+    </div>
+    <div class="header-tools">
+      <div class="session-line" aria-label="Sesión institucional">
+        <button id="vaultToggle" class="vault-badge" type="button" aria-expanded="false" aria-controls="vaultPanel"
+          disabled>Cargando…</button>
+        <span id="sessionSeparator" aria-hidden="true" hidden>·</span>
+        <button id="lockVault" class="session-action" type="button" hidden>Bloquear</button>
+      </div>
+    </div>
+    <section id="vaultPanel" class="credentials" aria-labelledby="vaultTitle" hidden>
+      <div class="vault-heading">
+        <h3 id="vaultTitle">Acceso institucional MET</h3>
+      </div>
+
+      <div id="vaultSetup" hidden>
+        <p class="hint">Crea una contraseña maestra para desbloquear el acceso cuando vuelvas a abrir la extensión. No
+          se puede recuperar si la olvidas.</p>
+        <div class="two">
+          <label>Usuario SEP
+            <input id="setupUser" autocomplete="off" placeholder="Usuario MET">
+          </label>
+          <label>Contraseña SEP
+            <input id="setupPassword" type="password" autocomplete="new-password" placeholder="Contraseña MET">
+          </label>
+        </div>
+        <div class="two">
+          <label>Contraseña maestra
+            <input id="setupMaster" type="password" autocomplete="new-password" placeholder="Mínimo 12 caracteres">
+          </label>
+          <label>Confirmar contraseña maestra
+            <input id="setupMasterRepeat" type="password" autocomplete="new-password" placeholder="Repetir contraseña">
+          </label>
+        </div>
+        <button id="saveVault" class="primary" type="button">Guardar y desbloquear</button>
+      </div>
+
+      <div id="vaultUnlock" hidden>
+        <p class="hint">Introduce tu contraseña maestra para utilizar las credenciales SEP.</p>
+        <label>Contraseña maestra
+          <input id="unlockMaster" type="password" autocomplete="off" placeholder="Desbloquear credenciales">
+        </label>
+        <button class="primary" id="unlockVault" type="button">Desbloquear</button>
+      </div>
+
+      <div id="vaultReady" hidden>
+        <div class="vault-actions">
+          <button id="changeVault" class="secondary" type="button">Cambiar credenciales</button>
+        </div>
+      </div>
+
+      <p class="hint">Credenciales cifradas en este navegador.</p>
+      <p id="vaultFeedback" class="hint" role="status" aria-live="polite"></p>
+      <button id="resetVault" class="subtle-action" type="button" hidden>Olvidé la contraseña maestra / borrar
+        credenciales</button>
+    </section>
+  </header>
+
+  <div class="shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-head">
+        <div class="brand sidebar-brand">
+          <img class="logo" src="assets/exodo-logo.png" alt="Éxodo — Gestión de Títulos Electrónicos">
+          <p id="institutionShell" class="institution-shell" aria-live="polite">Éxodo</p>
+        </div>
+        <button id="sidebarToggle" class="sidebar-toggle" type="button" aria-label="Contraer barra lateral"
+          aria-expanded="true" aria-controls="sidebar" title="Contraer barra lateral">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+            class="icon icon-tabler icons-tabler-outline icon-tabler-layout-sidebar" aria-hidden="true">
+            <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+            <path d="M4 6a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2l0 -12" />
+            <path d="M9 4l0 16" />
+          </svg>
+        </button>
+      </div>
+      <nav aria-label="Operaciones">
+        <button class="nav active" data-tab="carga" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+            stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 16V4" />
+            <path d="m7 9 5-5 5 5" />
+            <path d="M4 20h16" />
+          </svg>
+          <span>Cargar título</span>
+        </button>
+        <button class="nav" data-tab="consulta" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+            stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.6-3.6" />
+          </svg>
+          <span>Consultar lote</span>
+        </button>
+        <button class="nav" data-tab="descarga" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+            stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 4v12" />
+            <path d="m7 11 5 5 5-5" />
+            <path d="M4 20h16" />
+          </svg>
+          <span>Descargar lote</span>
+        </button>
+        <button class="nav" data-tab="cancela" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+            stroke-linejoin="round" aria-hidden="true">
+            <path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z" />
+            <path d="M14 3v5h5" />
+            <path d="m9.5 13.5 5 5" />
+            <path d="m14.5 13.5-5 5" />
+          </svg>
+          <span>Cancelar título</span>
+        </button>
+        <button class="nav" data-tab="institucion" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+            stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 21V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v16" />
+            <path d="M15 9h4a1 1 0 0 1 1 1v11" />
+            <path d="M2 21h20" />
+            <path d="M8 8h3M8 12h3M8 16h3" />
+          </svg>
+          <span>Cancelar por institución</span>
+        </button>
+        <button class="nav" data-tab="historial" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+            stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 12a9 9 0 1 0 3-6.7" />
+            <path d="M3 4v5h5" />
+            <path d="M12 8v4l3 2" />
+          </svg>
+          <span>Historial de lotes</span>
+        </button>
+        <button class="nav" data-tab="informacion" type="button">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+            class="icon icon-tabler icons-tabler-outline icon-tabler-settings">
+            <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+            <path
+              d="M10.325 4.317c.426 -1.756 2.924 -1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543 -.94 3.31 .826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756 .426 1.756 2.924 0 3.35a1.724 1.724 0 0 0 -1.066 2.573c.94 1.543 -.826 3.31 -2.37 2.37a1.724 1.724 0 0 0 -2.572 1.065c-.426 1.756 -2.924 1.756 -3.35 0a1.724 1.724 0 0 0 -2.573 -1.066c-1.543 .94 -3.31 -.826 -2.37 -2.37a1.724 1.724 0 0 0 -1.065 -2.572c-1.756 -.426 -1.756 -2.924 0 -3.35a1.724 1.724 0 0 0 1.066 -2.573c-.94 -1.543 .826 -3.31 2.37 -2.37c1 .608 2.296 .07 2.572 -1.065" />
+            <path d="M9 12a3 3 0 1 0 6 0a3 3 0 0 0 -6 0" />
+          </svg><span>Configuración</span>
+        </button>
+      </nav>
+      <div class="aside-note">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+          stroke-linejoin="round" aria-hidden="true">
+          <rect x="4" y="10" width="16" height="10" rx="2" />
+          <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+        </svg>
+        <p>Conexión exclusiva a<br><strong>met.sep.gob.mx</strong><span id="brandIdentity">Éxodo by CLA Tech</span></p>
+      </div>
+    </aside>
+
+    <main>
+      <div class="columns">
+        <section class="panel main-panel" aria-labelledby="title">
+          <div id="fields"></div>
+          <div id="formAlert" class="form-alert" role="alert" hidden></div>
+
+          <div class="actions">
+            <button id="preview" class="secondary" type="button">Ver solicitud SOAP</button>
+            <button id="submit" class="primary" type="button">Enviar a SEP</button>
+          </div>
+        </section>
+
+        <section class="panel response-panel" aria-labelledby="responseTitle">
+          <div class="heading">
+            <h2 id="responseTitle">Respuesta del servicio</h2>
+            <div id="status" class="hint" role="status" aria-live="polite"></div>
+          </div>
+
+          <div id="summary" class="summary" role="status" aria-live="polite" hidden></div>
+          <div id="results" class="results-wrap" aria-live="polite"></div>
+
+          <div class="response-footer">
+            <details>
+              <summary>XML de respuesta</summary>
+              <pre id="response">Sin respuesta.</pre>
+            </details>
+            <details>
+              <summary>XML de solicitud (credenciales ocultas)</summary>
+              <pre id="request">Sin solicitud.</pre>
+            </details>
+
+            <div class="downloads">
+              <button class="secondary" id="downloadResponse" type="button" disabled>Guardar respuesta XML</button>
+              <button class="secondary" id="downloadPayload" type="button" disabled>Descargar ZIP de resultados</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+
+</html>
