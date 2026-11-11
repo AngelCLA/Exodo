@@ -14,11 +14,12 @@ Documentación relacionada:
 - [Notas de diseño UI/UX](docs/DISENO_UI.md)
 - [Guía para contribuir](CONTRIBUTING.md)
 - [Política de seguridad](SECURITY.md)
+- [Historial de cambios](CHANGELOG.md)
 - [Licencia MIT](LICENSE)
 
 ## Estado
 
-- Versión del manifiesto: `1.0`.
+- Versión del manifiesto: `1.1.0`.
 - Interfaz con la paleta institucional.
 - El usuario reportó pruebas exitosas en el entorno disponible: envío de varios XML, recepción de identificadores/folios y consulta o descarga con esos identificadores con resultados reales; también reportó funcionamiento de todas las operaciones. No se registraron la fecha ni la identificación del entorno; la validación formal del WSDL no está documentada.
 - Las operaciones de carga y cancelación pueden tener efectos reales.

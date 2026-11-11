@@ -44,16 +44,15 @@ function page({stored={},setError=false,getError=false,removeError=false}={}){
 }
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
 
-test('application starts at release 1.0 without previous release notes',async()=>{
+test('application reports the manifest release in Configuración',async()=>{
  const manifest=JSON.parse(fs.readFileSync('manifest.json','utf8'));
- assert.equal(manifest.version,'1.0');
+ assert.match(manifest.version,/^\d+\.\d+\.\d+$/);
  const p=page();await settle();p.nav('informacion').fire('click');await settle();
- assert.match(p.el('fields').markup,/<dt>Versión de la extensión<\/dt><dd>1\.0<\/dd>/);
- assert.doesNotMatch(p.el('fields').markup,/Versión de pruebas|0\.[123](?:\.0)?/);
- for(const path of ['README.md','docs/MANUAL_DE_USUARIO.md']){
-  const text=fs.readFileSync(path,'utf8');
-  assert.doesNotMatch(text,/Historial de versiones|0\.[123](?:\.0)?|versión de pruebas/i);
- }
+ const version=manifest.version.replace(/\./g,'\\.');
+ assert.match(p.el('fields').markup,new RegExp(`<dt>Versión de la extensión</dt><dd>${version}</dd>`));
+ const readme=fs.readFileSync('README.md','utf8');
+ assert.match(readme,new RegExp(`Versión del manifiesto: \`${version}\``));
+ assert.ok(fs.existsSync('CHANGELOG.md'));
 });
 
  test('Configuración defaults to generic identity and exposes fixed project information',async()=>{

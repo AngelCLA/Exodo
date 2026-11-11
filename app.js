@@ -85,7 +85,7 @@ function setTab(next){tab=next;selectedFile=null;batchFiles=null;cancelTarget=nu
     <h2 id="systemVersionTitle">Aplicación</h2>
     <dl>
       <div><dt>Nombre del proyecto</dt><dd>Éxodo</dd></div>
-      <div><dt>Versión de la extensión</dt><dd>1.0</dd></div>
+      <div><dt>Versión de la extensión</dt><dd>1.1.0</dd></div>
     </dl>
   </section>
   <section class="system-info-section" aria-labelledby="systemConnectionTitle">
