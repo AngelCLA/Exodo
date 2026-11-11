@@ -236,17 +236,19 @@ En **Cancelar título** y **Cancelar por institución**, sobre el formulario apa
 - Hover y foco interior: borde `--accent`; al arrastrar se añade fondo `--accent-subtle`.
 - SVG inline de 28 px en `--accent`: subir/seleccionar sin archivo y documento con check cuando existe una selección real. Son decorativos (`aria-hidden`), con etiqueta y texto de estado visibles.
 - El check significa **archivo seleccionado**, nunca validado ni enviado a SEP; el texto lo aclara explícitamente. La validación XML y el envío mantienen su flujo existente.
-- Se conserva el input nativo accesible por teclado y `accept=".xml,text/xml,application/xml"`, además del arrastre. Está oculto solo visualmente (no deshabilitado ni retirado del orden de foco); una etiqueta `<label for="file">` con texto **Seleccionar archivo**, borde y texto `--accent` abre el selector con clic. Al llegar al input con Tab, Enter o Espacio abre el selector nativo y el foco se dibuja sobre la etiqueta visible.
+- Se conserva el input nativo accesible por teclado y `accept=".xml,.zip,text/xml,application/xml,application/zip"`, además del arrastre. Está oculto solo visualmente (no deshabilitado ni retirado del orden de foco); una etiqueta `<label for="file">` con texto **Seleccionar archivo**, borde y texto `--accent` abre el selector con clic. Al llegar al input con Tab, Enter o Espacio abre el selector nativo y el foco se dibuja sobre la etiqueta visible.
+- Al elegir un ZIP, el estado muestra el total de XML encontrados y aclara que cada uno se enviará por separado y que el ZIP no se envía. La zona mantiene la misma estructura visual; no se añaden controles nuevos.
 - El selector aparece arriba y, directamente debajo, `#fileinfo` con `role="status"` muestra **Ningún archivo seleccionado** o el nombre y tamaño del archivo como texto; los nombres largos pueden partirse sin desbordar. Las ayudas y el aviso de que no se ha validado ni enviado aparecen después.
 - El input usa `aria-describedby="filehelp fileinfo filestate"`. Al reemplazar o vaciar la selección, o volver a la pestaña de carga, se actualizan el icono y los textos.
 
 ### Historial
 
-- Filas con borde de 1 px, radio de 8 px, hover con borde más fuerte.
-- Título en `--dark-blue`, metadatos en `--text-subtle`.
-- Los tipos se muestran con nombres legibles (Carga, Consulta, Descarga, Cancelación, Cancelación por institución).
-- Si el registro tiene resultados parseados, se muestra un resumen (total, correctos, con error).
-- Barra superior `.history-toolbar` con el conteo y el botón **Vaciar historial**, que pide confirmación y se deshabilita cuando no hay movimientos.
+- Tabla por lote con columnas **Lote**, **Creación**, **Consulta**, **Descarga** y **Acciones**, dentro de `.history-table-wrap`, que conserva desplazamiento horizontal como respaldo. Las fechas se muestran en dos líneas (fecha y hora) para que las acciones quepan sin desplazamiento en el panel.
+- Reutiliza `.results-table` para encabezados fijos, bordes y hover; cada fecha usa `dd/mm/aa` y `HH:MM` en dos líneas, con `—` cuando no existe.
+- Las acciones son botones `.secondary.history-action` dentro de `.history-actions` (flex con salto de línea): **Consultar** y **Descargar** ejecutan la solicitud y muestran el resultado en el panel derecho; **Cancelar** abre el formulario `.history-cancel` con folio y motivo.
+- El formulario de cancelación reutiliza el borde de error y el aviso de operación irreversible; el folio se rellena solo cuando el lote tiene un único folio registrado.
+- Los registros sin lote (cancelaciones manuales, envíos fallidos) se muestran en `.history-other` reutilizando `.history-row`, de modo que no desaparecen de la vista.
+- Barra superior `.history-toolbar` con el conteo (`X lotes · Y movimientos`). El historial no se puede vaciar desde la interfaz: no hay acción destructiva.
 
 ### Estados vacíos
 
@@ -303,7 +305,7 @@ Calculado con la fórmula WCAG sobre los colores base:
 ## Implementación y mantenimiento
 
 - No hay framework, build ni dependencias de UI. Todo el estilo vive en `style.css`.
-- Los IDs que consume `app.js` se conservan; `file`, `fileinfo`, `drop`, `history`, `historyCount`, `clearHistory` y `numeroLote` se generan en `setTab`.
+- Los IDs que consume `app.js` se conservan; `file`, `fileinfo`, `drop`, `history`, `historyCount` y `numeroLote` se generan en `setTab`.
 - Cambios de `app.js` relacionados con la interfaz:
   - `#vaultBadge.dataset.state` con `ready`, `locked` o `setup`.
   - Clases `cell-ok` y `cell-error` en la segunda celda de la tabla de resultados.

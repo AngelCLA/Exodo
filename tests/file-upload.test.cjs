@@ -68,7 +68,7 @@ test('upload template provides distinct inline icons and accessible native XML s
  assert.notEqual(upload.match(/<path[^>]+>/)[0],selected.match(/<path[^>]+>/)[0]);
  for(const icon of [upload,selected])assert.match(icon,/aria-hidden="true"/);
  assert.match(markup,/<label[^>]*for="file"/);
- assert.match(markup,/<input[^>]*type="file"[^>]*accept="\.xml,text\/xml,application\/xml"/);
+ assert.match(markup,/<input[^>]*type="file"[^>]*accept="\.xml,\.zip,text\/xml,application\/xml,application\/zip"/);
  assert.match(markup,/id="fileinfo"[^>]*role="status"/);
  assert.match(css,/\.drop \.file-icon\s*\{\s*display: none;/);
  assert.match(css,/\.drop\.selected \.file-icon\s*\{\s*display: block;/);

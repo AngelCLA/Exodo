@@ -1,5 +1,6 @@
 const ENDPOINT='https://met.sep.gob.mx/met-ws/services/';
 const MAX_XML_BYTES=1024*1024;
+const MAX_ZIP_BYTES=50*1024*1024;
 const NS='http://ws.web.mec.sep.mx/schemas';
 const OPS={
  carga:{title:'Cargar título electrónico',subtitle:'Importa el XML generado en SATE.',tag:'cargaTituloElectronicoRequest',label:'Enviar título a SEP'},
@@ -12,8 +13,8 @@ const OPS={
 };
 const INSTITUTION_KEY='institutionDisplayName';
 const MAX_INSTITUTION_NAME_LENGTH=120;
-let unlockedCredentials=null, vaultBusy=false, sending=false;
-let tab='carga', lastResponse='', lastFilename='respuesta.xml', lastPayload=null, selectedFile=null, currentResults=[];
+let unlockedCredentials=null, vaultBusy=false, sending=false, historyBusy=false, cancelTarget=null;
+let tab='carga', lastResponse='', lastFilename='respuesta.xml', lastPayload=null, selectedFile=null, batchFiles=null, currentResults=[];
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&apos;');
 const node=(k,v)=>`<${k}>${esc(v)}</${k}>`;
@@ -23,13 +24,21 @@ const parseXML=x=>{const d=new DOMParser().parseFromString(x,'application/xml');
 function findValue(xml,names){try{const d=parseXML(xml);const n=[...d.getElementsByTagName('*')].find(e=>names.includes(e.localName));return n?.textContent?.trim()||''}catch{return ''}}
 const CANCEL_NOTICE='<div class="danger-notice" role="note"><strong>Aviso:</strong> Operación irreversible. Al enviar se ejecuta una cancelación real en la SEP. Revisa el folio antes de continuar.</div>';
 function setFormAlert(message,type='error'){const el=$('formAlert');el.replaceChildren();if(message){const prefix=document.createElement('strong');prefix.textContent=type==='info'?'Aviso: ':'Error: ';el.append(prefix,document.createTextNode(message))}el.dataset.type=type;el.hidden=!message}
-function updateFileInfo(){const selected=!!selectedFile;
+function updateFileInfo(){const selected=!!selectedFile,batch=!!batchFiles?.length;
  $('drop')?.classList.toggle('selected',selected);
- const label=$('filelabel');if(label)label.textContent=selected?'Título electrónico seleccionado':'Arrastra aquí tu título electrónico';
- const state=$('filestate');if(state)state.textContent=selected?'Archivo seleccionado; aún no validado ni enviado a SEP.':'Seleccionar un archivo no lo envía a SEP.';
- const el=$('fileinfo');if(el)el.textContent=selected?`${selectedFile.name} · ${selectedFile.size.toLocaleString()} bytes`:'Ningún archivo seleccionado';
+ const label=$('filelabel');if(label)label.textContent=selected?batch?'ZIP de títulos seleccionado':'Título electrónico seleccionado':'Arrastra aquí tu título electrónico';
+ const state=$('filestate');if(state)state.textContent=selected?batch?`${batchFiles.length} XML encontrados; cada uno se enviará por separado a la SEP. El ZIP no se envía.`:'Archivo seleccionado; aún no validado ni enviado a SEP.':'Seleccionar un archivo no lo envía a SEP.';
+ const el=$('fileinfo');if(el)el.textContent=selected?batch?`${selectedFile.name} · ${batchFiles.length} XML`:`${selectedFile.name} · ${selectedFile.size.toLocaleString()} bytes`:'Ningún archivo seleccionado';
 }
-function setTab(next){tab=next;selectedFile=null;setFormAlert('');
+async function selectFile(file){
+ selectedFile=file||null;batchFiles=null;setFormAlert('');
+ if(selectedFile&&/\.zip$/i.test(selectedFile.name)){
+  try{batchFiles=await xmlFilesFromZip(selectedFile)}
+  catch(e){selectedFile=null;batchFiles=null;setFormAlert(e.message)}
+ }
+ updateFileInfo();
+}
+function setTab(next){tab=next;selectedFile=null;batchFiles=null;cancelTarget=null;setFormAlert('');
  const isInformacion=tab==='informacion';
  document.querySelectorAll('.nav').forEach(b=>{const on=b.dataset.tab===tab;b.classList.toggle('active',on);if(on)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
  $('title').textContent=OPS[tab].title;$('submit').textContent=OPS[tab].label;
@@ -41,17 +50,17 @@ function setTab(next){tab=next;selectedFile=null;setFormAlert('');
   <svg class="upload-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 16V3m-5 5 5-5 5 5M4 15v5h16v-5"/></svg>
   <svg class="file-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M14 2H5v20h14V7l-5-5v5h5M8 14l3 3 5-6"/></svg>
   <div id="filelabel">Arrastra aquí tu título electrónico</div>
-  <input type="file" id="file" accept=".xml,text/xml,application/xml" aria-describedby="filehelp fileinfo filestate">
+  <input type="file" id="file" accept=".xml,.zip,text/xml,application/xml,application/zip" aria-describedby="filehelp fileinfo filestate">
   <label for="file" class="file-selector">Seleccionar archivo</label>
   <div class="hint" id="fileinfo" role="status">Ningún archivo seleccionado</div>
-  <div class="hint" id="filehelp">XML generado por SATE · Usa el selector o arrastra un archivo .xml · Máximo local: 1 MB</div>
+  <div class="hint" id="filehelp">XML generado por SATE o ZIP con varios XML · Máximo por XML: 1 MB · El ZIP no se envía</div>
   <div class="hint" id="filestate">Seleccionar un archivo no lo envía a SEP.</div>
  </div>`,
  consulta:field('numeroLote','Número de lote','number','Ej. 123456'),
  descarga:field('numeroLote','Número de lote','number','Ej. 123456'),
  cancela:CANCEL_NOTICE+field('folioControl','Folio de control')+field('motCancelacion','Motivo de cancelación'),
  institucion:CANCEL_NOTICE+field('folioControl','Folio de control')+field('cveInstitucion','Clave de institución')+field('motCancelacion','Motivo de cancelación'),
- historial:`<div class="history-toolbar"><span id="historyCount" class="hint"></span><button id="clearHistory" class="secondary" type="button">Vaciar historial</button></div><div id="history"></div>`,
+ historial:`<div class="history-toolbar"><span id="historyCount" class="hint"></span></div><div id="history"></div>`,
  informacion:`<div class="system-info">
   <section class="system-info-section" aria-labelledby="institutionSettingsTitle">
     <h2 id="institutionSettingsTitle">Identidad institucional</h2>
@@ -101,27 +110,40 @@ function setTab(next){tab=next;selectedFile=null;setFormAlert('');
  </div>`})[tab];
  $('fields').classList.toggle('fields-grow',tab==='carga');
  if(tab==='carga'){const input=$('file'),drop=$('drop');
-  input.addEventListener('change',e=>{selectedFile=e.target.files?.[0]||null;updateFileInfo()});
+  input.addEventListener('change',e=>{selectFile(e.target.files?.[0]||null)});
   ['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('dragover')}));
   ['dragleave','dragend'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('dragover')}));
-  drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('dragover');const f=e.dataTransfer?.files?.[0];if(!f)return;selectedFile=f;try{const dt=new DataTransfer();dt.items.add(f);input.files=dt.files}catch(err){}updateFileInfo()});
+  drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('dragover');const f=e.dataTransfer?.files?.[0];if(!f)return;selectedFile=f;try{const dt=new DataTransfer();dt.items.add(f);input.files=dt.files}catch(err){}selectFile(f)});
   updateFileInfo();
  }
- if(tab==='historial'){$('clearHistory').addEventListener('click',clearHistory);renderHistory()}
+ if(tab==='historial')renderHistory()
  if(isInformacion){$('saveInstitution').addEventListener('click',saveInstitution);$('resetInstitution').addEventListener('click',resetInstitution);renderInstitutionSettings()}
  $('submit').disabled=!unlockedCredentials&&tab!=='historial';$('preview').disabled=!unlockedCredentials&&tab!=='historial';
 }
 async function fileBase64(file){const bytes=new Uint8Array(await file.arrayBuffer());let b='';// Use chunks to avoid maximum argument-size issues.
  for(let i=0;i<bytes.length;i+=8192)b+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(b)}
+async function buildCargaRequest(file){
+ if(!file)throw Error('Selecciona un XML generado por SATE.');
+ if(!/\.xml$/i.test(file.name))throw Error('Este prototipo acepta archivos .xml.');
+ if(file.size>MAX_XML_BYTES)throw Error('El XML supera el límite de 1 MiB (1.048.576 bytes). No se leyó ni se envió el archivo.');
+ const content=await file.text();const doc=parseXML(content);const root=doc.documentElement;if(root.localName!=='TituloElectronico'||!root.getAttribute('folioControl'))throw Error('El XML no tiene el elemento TituloElectronico y su folioControl.');
+ const folio=root.getAttribute('folioControl');
+ return {parts:node('nombreArchivo',file.name)+node('archivoBase64',await fileBase64(file)),reference:{folio,filename:file.name}};
+}
+function soapEnvelope(tag,parts,usuario,password){
+ parts+=`<autenticacion>${node('usuario',usuario)}${node('password',password)}</autenticacion>`;
+ const xml=`<?xml version="1.0" encoding="UTF-8"?><Envelope xmlns="http://schemas.xmlsoap.org/soap/envelope/"><Body><${tag} xmlns="${NS}">${parts}</${tag}></Body></Envelope>`;
+ // Don't expose password or Base64 in the interface's preview.
+ const safe=xml.replace(/<password>[\s\S]*?<\/password>/,'<password>••••••••</password>').replace(/<archivoBase64>[\s\S]*?<\/archivoBase64>/,'<archivoBase64>[CONTENIDO BASE64 OCULTO]</archivoBase64>');
+ return {xml,safe};
+}
 async function buildRequest(){const usuario=unlockedCredentials?.usuario, password=unlockedCredentials?.password;
  if(!usuario||!password)throw Error('Desbloquea las credenciales institucionales antes de continuar.');
  let parts='';let reference={};
  if(tab==='carga'){
-  if(!selectedFile)throw Error('Selecciona un XML generado por SATE.');
-  if(!/\.xml$/i.test(selectedFile.name))throw Error('Este prototipo acepta archivos .xml.');
-  if(selectedFile.size>MAX_XML_BYTES)throw Error('El XML supera el límite de 1 MiB (1.048.576 bytes). No se leyó ni se envió el archivo.');
-  const content=await selectedFile.text();const doc=parseXML(content);const root=doc.documentElement;if(root.localName!=='TituloElectronico'||!root.getAttribute('folioControl'))throw Error('El XML no tiene el elemento TituloElectronico y su folioControl.');reference.folio=root.getAttribute('folioControl');
-  parts=node('nombreArchivo',selectedFile.name)+node('archivoBase64',await fileBase64(selectedFile));reference.filename=selectedFile.name;
+  const file=batchFiles?.[0]||selectedFile;
+  if(batchFiles&&!batchFiles.length)throw Error('El ZIP no contiene archivos .xml.');
+  const carga=await buildCargaRequest(file);parts=carga.parts;reference=carga.reference;
  }else if(tab==='consulta'||tab==='descarga'){
   const lot=get('numeroLote');if(!/^\d+$/.test(lot))throw Error('El número de lote debe ser un entero positivo.');parts=node('numeroLote',lot);reference.lot=lot;
  }else if(tab==='cancela'||tab==='institucion'){
@@ -130,10 +152,7 @@ async function buildRequest(){const usuario=unlockedCredentials?.usuario, passwo
   if(tab==='institucion'){const school=get('cveInstitucion');if(!school)throw Error('Captura la clave de institución.');parts+=node('cveInstitucion',school);reference.school=school}
   parts+=node('motCancelacion',reason);reference.folio=folio;
  }else throw Error('Operación no disponible');
- parts+=`<autenticacion>${node('usuario',usuario)}${node('password',password)}</autenticacion>`;
- const xml=`<?xml version="1.0" encoding="UTF-8"?><Envelope xmlns="http://schemas.xmlsoap.org/soap/envelope/"><Body><${OPS[tab].tag} xmlns="${NS}">${parts}</${OPS[tab].tag}></Body></Envelope>`;
- // Don't expose password or Base64 in the interface's preview.
- const safe=xml.replace(/<password>[\s\S]*?<\/password>/,'<password>••••••••</password>').replace(/<archivoBase64>[\s\S]*?<\/archivoBase64>/,'<archivoBase64>[CONTENIDO BASE64 OCULTO]</archivoBase64>');
+ const {xml,safe}=soapEnvelope(OPS[tab].tag,parts,usuario,password);
  return {xml,safe,reference};
 }
 function status(s){$('status').textContent=s}
@@ -180,6 +199,19 @@ async function unzipEntry(bytes,e){
  const result=new Uint8Array(await new Response(stream).arrayBuffer());
  if(result.length>20*1024*1024)throw Error('Entrada demasiado grande.');return result;
 }
+async function xmlFilesFromZip(file){
+ if(file.size>MAX_ZIP_BYTES)throw Error('El ZIP supera el límite local de 50 MiB (52.428.800 bytes). No se leyó ni se envió.');
+ const bytes=new Uint8Array(await file.arrayBuffer());
+ const entries=zipEntries(bytes).filter(e=>/\.xml$/i.test(e.name)&&!/(^|\/)__MACOSX\//.test(e.name)&&!/(^|\/)\._/.test(e.name));
+ if(!entries.length)throw Error('El ZIP no contiene archivos .xml.');
+ const files=[];
+ for(const entry of entries){
+  const data=await unzipEntry(bytes,entry);
+  if(data.length>MAX_XML_BYTES)throw Error(`El XML ${entry.name} supera el límite de 1 MiB (1.048.576 bytes). No se leyó ni se envió.`);
+  files.push(new File([data],entry.name.split('/').pop(),{type:'application/xml'}));
+ }
+ return files.sort((a,b)=>a.name.localeCompare(b.name));
+}
 function spreadsheetRows(sheet,shared){
  const rows=[];for(const row of nsText(sheet,'row')){
   const result=[];
@@ -216,6 +248,22 @@ function showResults(results){
  const table=document.createElement('table');table.className='results-table';const head=document.createElement('thead');const tr=document.createElement('tr');for(const name of ['Archivo','Estatus','Descripción','Folio control']){const th=document.createElement('th');th.textContent=name;tr.append(th)}head.append(tr);table.append(head);
   const body=document.createElement('tbody');for(const r of results.slice(0,2000)){const tr=document.createElement('tr');const cells=[r.archivo,r.estatus==='1'?'1 · Correcto':r.estatus==='2'?'2 · Error':r.estatus,r.descripcion,r.folio];cells.forEach((val,i)=>{const td=document.createElement('td');if(i===1){if(r.estatus==='1')td.className='cell-ok';else if(r.estatus==='2')td.className='cell-error'}td.textContent=String(val);tr.append(td)});body.append(tr)}table.append(body);el.append(table);
 }
+function showBatchResults(rows){
+ const el=$('results');el.replaceChildren();
+ if(!rows.length){resultsPlaceholder();return}
+ const sent=rows.filter(r=>r.sent&&r.ok).length,uncertain=rows.filter(r=>r.uncertain).length;
+ const title=document.createElement('strong');title.textContent=`XML procesados: ${rows.length} · Enviados: ${sent} · Con error: ${rows.length-sent-uncertain}${uncertain?` · Inciertos: ${uncertain}`:''}`;el.append(title);
+ const table=document.createElement('table');table.className='results-table';
+ const head=document.createElement('thead');const headRow=document.createElement('tr');
+ for(const name of ['Archivo','Lote','Resultado','Detalle']){const th=document.createElement('th');th.textContent=name;headRow.append(th)}
+ head.append(headRow);table.append(head);
+ const body=document.createElement('tbody');
+ for(const r of rows){const tr=document.createElement('tr');
+  const cells=[r.archivo,r.lote||'—',r.sent?(r.ok?'Enviado':'Respuesta con error'):r.uncertain?'Incierto':'No enviado',r.detalle||''];
+  cells.forEach((val,i)=>{const td=document.createElement('td');if(i===2){if(r.sent&&r.ok)td.className='cell-ok';else if(!r.uncertain)td.className='cell-error'}td.textContent=String(val);tr.append(td)});
+  body.append(tr)}
+ table.append(body);el.append(table);
+}
 async function saveRecord(record){const {history=[]}=await chrome.storage.local.get('history');history.unshift(record);await chrome.storage.local.set({history:history.slice(0,250)});}
 function institutionName(value){const name=typeof value==='string'?value.trim():'';return name&&name.length<=MAX_INSTITUTION_NAME_LENGTH?name:''}
 function setInstitutionStatus(message){const el=$('institutionStatus');if(el)el.textContent=message}
@@ -238,7 +286,81 @@ async function resetInstitution(){
 }
 function validHttpStatus(value){return Number.isInteger(value)&&value>=100&&value<=599}
 function validWorkerReply(value){return !!value&&typeof value==='object'&&typeof value.ok==='boolean'&&validHttpStatus(value.status)&&typeof value.xml==='string'}
+function credentialsOrThrow(){const {usuario,password}=unlockedCredentials||{};if(!usuario||!password)throw Error('Desbloquea las credenciales institucionales antes de continuar.');return {usuario,password}}
+function describeResponse(response){
+ const xml=response.xml||'';
+ const lot=findValue(xml,['numeroLote','numeroLoteRespuesta']);
+ const fault=findValue(xml,['faultstring','Text']);
+ const code=findValue(xml,['estatusLote','codigo','codigoRespuesta','estatus']);
+ const msg=findValue(xml,['mensaje','mensajeRespuesta','descripcion']);
+ const lines=[response.ok?'Solicitud HTTP aceptada (no implica éxito del trámite).':`Error HTTP o SOAP: ${response.error||response.status||'desconocido'}`,lot?`Número de lote: ${lot}`:'',code?`Estado/código: ${code}`:'',msg?`Mensaje: ${msg}`:'',fault?`SOAP Fault: ${fault}`:'','Revisa siempre el XML completo para confirmar el resultado.'].filter(Boolean);
+ return {lot,fault,code,msg,lines};
+}
+async function showServiceResponse(type,response){
+ $('response').textContent=response.xml||response.error||'Sin respuesta';
+ if(!response.xml)return null;
+ lastResponse=response.xml;lastFilename=`sep_${type}_${Date.now()}.xml`;$('downloadResponse').disabled=false;
+ if(type!=='consulta'&&type!=='descarga')return null;
+ lastPayload=extractPayload(response.xml);$('downloadPayload').disabled=!lastPayload;
+ if(!lastPayload)return null;
+ try{return await readExcelFromZip(lastPayload.bytes)}
+ catch(e){$('results').textContent='ZIP detectado. '+e.message+' Puedes descargar el ZIP original.';return null}
+}
+async function dispatchSoap(xml){
+ const response=await chrome.runtime.sendMessage({type:'SOAP',endpoint:ENDPOINT,xml});
+ if(response?.uncertain)throw Error(response.error||'No se pudo confirmar el resultado del envío.');
+ if(response&&typeof response==='object'&&response.ok===false&&response.error&&!('status' in response)&&!('xml' in response))throw Error(response.error);
+ if(!validWorkerReply(response))throw Error('La respuesta del servicio no se pudo confirmar.');
+ return response;
+}
+async function sendBatch(){
+ sending=true;
+ try{
+  const files=batchFiles.slice(),total=files.length;
+  if(!total)throw Error('El ZIP no contiene archivos .xml.');
+  const creds=unlockedCredentials;
+  if(!creds?.usuario||!creds?.password)throw Error('Desbloquea las credenciales institucionales antes de continuar.');
+  if(!confirm(`Se enviarán ${total} XML a la SEP, uno por uno y en solicitudes independientes. Cada XML puede generar su propio lote.\n\nEl ZIP no se envía. ¿Continuar?`))return;
+  setFormAlert('');
+  $('submit').disabled=true;$('submit').classList.add('loading');$('preview').disabled=true;
+  $('responseTitle').closest('.panel').setAttribute('aria-busy','true');
+  resetDownloads();lastResponse='';lastFilename=`sep_carga_${Date.now()}.xml`;
+  const rows=[];
+  for(let i=0;i<total;i++){
+   const file=files[i],row={archivo:file.name,folio:'',lote:'',sent:false,uncertain:false,detalle:''};
+   rows.push(row);showBatchResults(rows);
+   status(`Enviando ${i+1} de ${total}: ${file.name}`);
+   setSummary(`Enviando ${i+1} de ${total}…`);
+   let dispatched=false;
+   try{
+    const carga=await buildCargaRequest(file);row.folio=carga.reference.folio;
+    const {xml,safe}=soapEnvelope(OPS.carga.tag,carga.parts,creds.usuario,creds.password);$('request').textContent=safe;
+    dispatched=true;
+    const response=await chrome.runtime.sendMessage({type:'SOAP',endpoint:ENDPOINT,xml});
+    if(response?.uncertain)throw Error(response.error||'No se pudo confirmar el resultado del envío.');
+    if(response&&typeof response==='object'&&response.ok===false&&response.error&&!('status' in response)&&!('xml' in response))throw Error(response.error);
+    if(!validWorkerReply(response))throw Error('La respuesta del servicio no se pudo confirmar.');
+    const responseXml=response.xml||'';lastResponse=responseXml;$('response').textContent=responseXml;
+    const lot=findValue(responseXml,['numeroLote','numeroLoteRespuesta']);
+    const fault=findValue(responseXml,['faultstring','Text']);
+    const code=findValue(responseXml,['estatusLote','codigo','codigoRespuesta','estatus']);
+    const msg=findValue(responseXml,['mensaje','mensajeRespuesta','descripcion']);
+    row.sent=true;row.ok=response.ok!==false;row.lote=lot;row.detalle=[`HTTP ${response.status||'-'}`,code,msg,fault].filter(Boolean).join(' · ');
+    try{await saveRecord({id:crypto.randomUUID(),timestamp:new Date().toISOString(),type:'carga',lot:lot||'',filename:file.name,folio:row.folio,httpStatus:response.status||null,code,msg:msg||fault||'',response:'',results:[],error:response.error||''})}
+    catch(e){row.detalle+=` · No se pudo guardar el historial (${e.message})`}
+   }catch(e){row.uncertain=dispatched;row.detalle=e.message||'Error inesperado'}
+   showBatchResults(rows);
+  }
+  const sent=rows.filter(r=>r.sent&&r.ok).length,uncertain=rows.filter(r=>r.uncertain).length,lots=rows.filter(r=>r.lote).map(r=>r.lote);
+  status('Proceso terminado');
+  setSummary([`XML procesados: ${rows.length}`,`Enviados: ${sent}`,rows.length-sent-uncertain>0?`Con error: ${rows.length-sent-uncertain}`:'',uncertain?`Resultado incierto: ${uncertain}`:'',lots.length?`Lotes: ${lots.join(', ')}`:'','Cada XML se envió en una solicitud independiente; el ZIP no se envió. El XML y la descarga corresponden al último envío. Revisa siempre el XML completo para confirmar el resultado.'].filter(Boolean).join('\n'));
+  if(lastResponse)$('downloadResponse').disabled=false;
+  selectedFile=null;batchFiles=null;updateFileInfo();
+ }catch(e){status('No se envió');setSummary(e.message);setFormAlert(e.message)}
+ finally{sending=false;$('submit').classList.remove('loading');$('submit').disabled=!unlockedCredentials;$('preview').disabled=!unlockedCredentials;$('responseTitle').closest('.panel').removeAttribute('aria-busy')}
+}
 async function send(){if(tab==='historial'||vaultBusy||sending)return;
+ if(tab==='carga'&&batchFiles)return sendBatch();
  sending=true;let dispatched=false,received=false;
  try{
   setFormAlert('');
@@ -251,14 +373,11 @@ async function send(){if(tab==='historial'||vaultBusy||sending)return;
   if(response&&typeof response==='object'&&response.ok===false&&response.error&&!('status' in response)&&!('xml' in response)){dispatched=false;throw Error(response.error)}
   if(!validWorkerReply(response))throw Error('La respuesta del servicio no se pudo confirmar.');
   received=true;
-  $('response').textContent=response.xml||response.error||'Sin respuesta';
-  if(response.xml){lastResponse=response.xml;lastFilename=`sep_${tab}_${Date.now()}.xml`;$('downloadResponse').disabled=false;if(tab==='descarga'||tab==='consulta'){lastPayload=extractPayload(response.xml);$('downloadPayload').disabled=!lastPayload;if(lastPayload){try{currentResults=await readExcelFromZip(lastPayload.bytes);showResults(currentResults)}catch(e){$('results').textContent='ZIP detectado. '+e.message+' Puedes descargar el ZIP original.'}}}}
-  const lot=findValue(response.xml||'',['numeroLote','numeroLoteRespuesta']);
-  const fault=findValue(response.xml||'',['faultstring','Text']);
-  const code=findValue(response.xml||'',['estatusLote','codigo','codigoRespuesta','estatus']);
-  const msg=findValue(response.xml||'',['mensaje','mensajeRespuesta','descripcion']);
+  const parsed=await showServiceResponse(tab,response);
+  if(parsed){currentResults=parsed;showResults(parsed)}
+  const {lot,code,msg,fault,lines}=describeResponse(response);
   status(response.status?`HTTP ${response.status} · ${response.ms} ms`:`Error de conexión · ${response.ms||0} ms`);
-  const summary=[response.ok?'Solicitud HTTP aceptada (no implica éxito del trámite).':`Error HTTP o SOAP: ${response.error||response.status||'desconocido'}`,lot?`Número de lote: ${lot}`:'',code?`Estado/código: ${code}`:'',msg?`Mensaje: ${msg}`:'',fault?`SOAP Fault: ${fault}`:'','Revisa siempre el XML completo para confirmar el resultado.'].filter(Boolean).join('\n');
+  const summary=lines.join('\n');
   setSummary(summary);
   const record={id:crypto.randomUUID(),timestamp:new Date().toISOString(),type:tab,lot:lot||req.reference.lot||'',filename:req.reference.filename||'',folio:req.reference.folio||'',httpStatus:response.status||null,code,msg:msg||fault||'',response:'',results:currentResults.map(r=>({archivo:r.archivo,estatus:r.estatus,descripcion:r.descripcion,folio:r.folio})),error:response.error||''};
   try{await saveRecord(record)}catch(e){setSummary(`${summary}\nAviso: no se pudo guardar el historial (${e.message}). La respuesta recibida se conserva en esta pantalla.`);setFormAlert('La respuesta se recibió, pero no se pudo guardar el historial.','info')}
@@ -267,17 +386,158 @@ async function send(){if(tab==='historial'||vaultBusy||sending)return;
 }
 function download(data,name,type='text/xml'){const url=URL.createObjectURL(new Blob([data],{type}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),5000)}
 const TYPE_LABEL={carga:'Carga',consulta:'Consulta',descarga:'Descarga',cancela:'Cancelación',institucion:'Cancelación por institución'};
-async function clearHistory(){if(!confirm('Esto borrará el historial de movimientos guardado en este navegador. Las credenciales no se modifican. ¿Continuar?'))return;await chrome.storage.local.remove('history');renderHistory()}
-async function renderHistory(){const el=$('history');if(!el)return;const {history=[]}=await chrome.storage.local.get('history');el.replaceChildren();
- const count=$('historyCount'),clear=$('clearHistory');if(count)count.textContent=history.length?`${history.length} movimiento${history.length===1?'':'s'}`:'Sin movimientos';if(clear)clear.disabled=!history.length;
+function formatHistoryDate(value){if(!value)return '—';const d=new Date(value);return Number.isNaN(d.getTime())?String(value):d.toLocaleString('es-MX',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false})}
+function lotGroups(history){
+ const groups=new Map();
+ for(const rec of history||[]){
+  if(!rec||!rec.lot||!['carga','consulta','descarga'].includes(rec.type))continue;
+  const key=String(rec.lot);
+  const group=groups.get(key)||{lot:key,createdAt:'',consultedAt:'',downloadedAt:'',folios:[]};
+  if(rec.type==='carga'){
+   if(rec.timestamp&&(!group.createdAt||rec.timestamp<group.createdAt))group.createdAt=rec.timestamp;
+   if(rec.folio&&!group.folios.includes(rec.folio))group.folios.push(rec.folio);
+  }
+  if(rec.type==='consulta'&&rec.timestamp&&(!group.consultedAt||rec.timestamp>group.consultedAt))group.consultedAt=rec.timestamp;
+  if(rec.type==='descarga'&&rec.timestamp&&(!group.downloadedAt||rec.timestamp>group.downloadedAt))group.downloadedAt=rec.timestamp;
+  groups.set(key,group);
+ }
+ return [...groups.values()].sort((a,b)=>String(b.createdAt||b.consultedAt||b.downloadedAt||'').localeCompare(String(a.createdAt||a.consultedAt||a.downloadedAt||'')));
+}
+function historyActionButton(label,action,group){
+ const btn=document.createElement('button');btn.type='button';btn.className='secondary history-action';btn.textContent=label;btn.dataset.action=action;btn.dataset.lot=group.lot;
+ btn.addEventListener('click',()=>action==='cancelar'?openCancel(group.lot,group.folios):runLotOperation(action,group.lot));
+ return btn;
+}
+function historyDateCell(value){
+ const td=document.createElement('td');
+ if(!value){td.textContent='—';return td}
+ const d=new Date(value);
+ if(Number.isNaN(d.getTime())){td.textContent=String(value);return td}
+ const date=document.createElement('div');date.textContent=d.toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'2-digit'});
+ const time=document.createElement('div');time.className='small';time.textContent=d.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit',hour12:false});
+ td.append(date,time);return td;
+}
+function renderHistoryTable(groups){
+ const wrap=document.createElement('div');wrap.className='history-table-wrap';
+ const table=document.createElement('table');table.className='results-table history-table';
+ const head=document.createElement('thead'),headRow=document.createElement('tr');
+ for(const name of ['Lote','Creación','Consulta','Descarga','Acciones']){const th=document.createElement('th');th.textContent=name;headRow.append(th)}
+ head.append(headRow);table.append(head);
+ const body=document.createElement('tbody');
+ for(const group of groups){
+  const row=document.createElement('tr');
+  const lot=document.createElement('td');lot.textContent=group.lot;row.append(lot);
+  row.append(historyDateCell(group.createdAt),historyDateCell(group.consultedAt),historyDateCell(group.downloadedAt));
+  const actions=document.createElement('td'),actionsGroup=document.createElement('div');actionsGroup.className='history-actions';
+  actionsGroup.append(historyActionButton('Consultar','consulta',group),historyActionButton('Descargar','descarga',group),historyActionButton('Cancelar','cancelar',group));
+  actions.append(actionsGroup);
+  row.append(actions);body.append(row);
+ }
+ table.append(body);wrap.append(table);return wrap;
+}
+function renderOtherOperations(records){
+ const wrap=document.createElement('div');wrap.className='history-other';
+ const title=document.createElement('strong');title.textContent=`Otras operaciones (${records.length})`;wrap.append(title);
+ for(const rec of records.slice(0,50)){
+  const row=document.createElement('div');row.className='history-row';
+  const head=document.createElement('strong');head.textContent=`${(TYPE_LABEL[rec.type]||String(rec.type||'Operación')).toUpperCase()} · ${rec.lot?'Lote '+rec.lot:rec.folio?'Folio '+rec.folio:'Sin identificador'}`;row.append(head);
+  const meta=document.createElement('div');meta.className='small';meta.textContent=[formatHistoryDate(rec.timestamp),rec.httpStatus?`HTTP ${rec.httpStatus}`:'',rec.filename||''].filter(Boolean).join(' · ');row.append(meta);
+  const detail=document.createElement('div');detail.textContent=[rec.code,rec.msg].filter(Boolean).join(' · ')||rec.error||'Sin detalle';row.append(detail);
+  wrap.append(row);
+ }
+ return wrap;
+}
+function openCancel(lot,folios){
+ cancelTarget={lot:String(lot),folio:folios.length===1?folios[0]:'',folios:folios.slice()};
+ renderHistory();
+}
+function renderCancelForm(target){
+ const el=$('history');if(!el)return;
+ const box=document.createElement('div');box.className='history-cancel';
+ box.innerHTML=`<strong>Cancelar título · lote ${esc(target.lot)}</strong>
+  <p class="hint">Operación real e irreversible en la SEP. ${target.folios.length>1?`Este lote tiene ${target.folios.length} folios registrados: confirma el folio correcto.`:'Confirma el folio antes de continuar.'}</p>
+  <label>Folio de control<input id="historyFolio" value="${esc(target.folio||'')}" autocomplete="off" placeholder="Folio del título"></label>
+  <label>Motivo de cancelación<input id="historyMotivo" autocomplete="off" placeholder="Motivo de la cancelación"></label>
+  <div class="history-cancel-actions"><button id="historyCancelSubmit" class="primary" type="button">Cancelar título</button><button id="historyCancelClose" class="secondary" type="button">Cerrar</button></div>
+  <p id="historyCancelStatus" class="hint" role="status" aria-live="polite"></p>`;
+ el.append(box);
+ $('historyCancelSubmit').addEventListener('click',()=>submitCancel(target));
+ $('historyCancelClose').addEventListener('click',()=>{cancelTarget=null;renderHistory()});
+ $('historyFolio').focus();
+}
+async function runLotOperation(type,lot){
+ if(historyBusy){status('Hay una operación en curso; espera a que termine.');return}
+ if(type!=='consulta'&&type!=='descarga')return;
+ const value=String(lot||'').trim();
+ if(!/^\d+$/.test(value)){setSummary('El número de lote debe ser un entero positivo.');status('No se envió');return}
+ historyBusy=true;let dispatched=false;
+ try{
+  cancelTarget=null;setFormAlert('');resetDownloads();setSummary('');
+  status(type==='consulta'?`Consultando el lote ${value}…`:`Descargando el lote ${value}…`);
+  const {usuario,password}=credentialsOrThrow();
+  const {xml,safe}=soapEnvelope(OPS[type].tag,node('numeroLote',value),usuario,password);
+  $('request').textContent=safe;
+  dispatched=true;
+  const response=await dispatchSoap(xml);
+  const parsed=await showServiceResponse(type,response);
+  if(parsed){currentResults=parsed;showResults(parsed)}
+  const {code,msg,fault,lines}=describeResponse(response);
+  status(response.status?`HTTP ${response.status} · ${response.ms} ms`:`Error de conexión · ${response.ms||0} ms`);
+  const summary=[`${type==='consulta'?'Consulta':'Descarga'} del lote ${value}:`,...lines].join('\n');
+  setSummary(summary);
+  const record={id:crypto.randomUUID(),timestamp:new Date().toISOString(),type,lot:value,filename:'',folio:'',httpStatus:response.status||null,code,msg:msg||fault||'',response:'',results:currentResults.map(r=>({archivo:r.archivo,estatus:r.estatus,descripcion:r.descripcion,folio:r.folio})),error:response.error||''};
+  try{await saveRecord(record)}catch(e){setSummary(`${summary}\nAviso: no se pudo guardar el historial (${e.message}).`)}
+  await renderHistory();
+ }catch(e){
+  const message=dispatched?`No se pudo confirmar el resultado del envío. Consulta la SEP antes de reintentar; no hay reintento automático. Detalle: ${e.message}`:e.message;
+  status(dispatched?'Resultado incierto':'No se envió');setSummary(message);
+ }
+ finally{historyBusy=false}
+}
+async function submitCancel(target){
+ if(historyBusy){const busy=$('historyCancelStatus');if(busy)busy.textContent='Hay una operación en curso; espera a que termine.';return}
+ const folio=$('historyFolio')?.value?.trim()||'',motivo=$('historyMotivo')?.value?.trim()||'',feedback=$('historyCancelStatus');
+ if(!folio||!motivo){if(feedback)feedback.textContent='Captura folio y motivo de cancelación.';return}
+ if(!confirm(`Vas a ejecutar una CANCELACIÓN REAL en la SEP.\n\nFolio: ${folio}\nLote: ${target.lot}\n\n¿Confirmas continuar?`))return;
+ historyBusy=true;let dispatched=false;
+ try{
+  setFormAlert('');resetDownloads();setSummary('');status(`Cancelando el folio ${folio}…`);
+  const {usuario,password}=credentialsOrThrow();
+  const {xml,safe}=soapEnvelope(OPS.cancela.tag,node('folioControl',folio)+node('motCancelacion',motivo),usuario,password);
+  $('request').textContent=safe;
+  dispatched=true;
+  const response=await dispatchSoap(xml);
+  await showServiceResponse('cancela',response);
+  const {code,msg,fault,lines}=describeResponse(response);
+  status(response.status?`HTTP ${response.status} · ${response.ms} ms`:`Error de conexión · ${response.ms||0} ms`);
+  const summary=[`Cancelación · lote ${target.lot} · folio ${folio}:`,...lines].join('\n');
+  setSummary(summary);
+  const record={id:crypto.randomUUID(),timestamp:new Date().toISOString(),type:'cancela',lot:target.lot,filename:'',folio,httpStatus:response.status||null,code,msg:msg||fault||'',response:'',results:[],error:response.error||''};
+  try{await saveRecord(record)}catch(e){setSummary(`${summary}\nAviso: no se pudo guardar el historial (${e.message}).`)}
+  cancelTarget=null;await renderHistory();
+ }catch(e){
+  const message=dispatched?`No se pudo confirmar el resultado del envío. Consulta la SEP antes de reintentar; no hay reintento automático. Detalle: ${e.message}`:e.message;
+  status(dispatched?'Resultado incierto':'No se envió');setSummary(message);
+ }
+ finally{historyBusy=false}
+}
+async function renderHistory(){
+ const el=$('history');if(!el)return;
+ const {history=[]}=await chrome.storage.local.get('history');
+ el.replaceChildren();
+ const groups=lotGroups(history);
+ const others=history.filter(rec=>rec&&(!rec.lot||!['carga','consulta','descarga'].includes(rec.type)));
+ const count=$('historyCount');
+ if(count)count.textContent=history.length?`${groups.length} lote${groups.length===1?'':'s'} · ${history.length} movimiento${history.length===1?'':'s'}`:'Sin movimientos';
  if(!history.length){const empty=document.createElement('div');empty.className='empty-state';const strong=document.createElement('strong');strong.textContent='Sin movimientos todavía.';const p=document.createElement('p');p.textContent='Las operaciones que ejecutes aparecerán aquí y se guardan solo en este navegador.';empty.append(strong,p);el.append(empty);return}
- for(const rec of history){const row=document.createElement('div');row.className='history-row';const title=document.createElement('strong');title.textContent=`${TYPE_LABEL[rec.type]||rec.type.toUpperCase()} · ${rec.lot?'Lote '+rec.lot:rec.folio?'Folio '+rec.folio:'Sin identificador'}`;row.append(title);const meta=document.createElement('div');meta.className='small';meta.textContent=`${new Date(rec.timestamp).toLocaleString('es-MX')} · HTTP ${rec.httpStatus||'-'} · ${rec.filename||''}`;row.append(meta);const detail=document.createElement('div');detail.textContent=[rec.code,rec.msg].filter(Boolean).join(' · ')||rec.error||'Consultar respuesta XML';row.append(detail);
- if(rec.results?.length){const res=document.createElement('div');res.className='small';res.textContent=`${rec.results.length} resultado${rec.results.length===1?'':'s'} · ${rec.results.filter(r=>r.estatus==='1').length} correctos · ${rec.results.filter(r=>r.estatus==='2').length} con error`;row.append(res)}
- if(rec.lot){const btn=document.createElement('button');btn.className='secondary';btn.textContent='Consultar lote';btn.addEventListener('click',()=>{setTab('consulta');$('numeroLote').value=rec.lot});row.append(btn)}
- if(rec.response){const btn=document.createElement('button');btn.className='secondary';btn.textContent='Guardar respuesta';btn.addEventListener('click',()=>download(rec.response,`sep_${rec.type}_${rec.lot||rec.id}.xml`));row.append(btn)}el.append(row)}
+ if(cancelTarget&&!groups.some(g=>g.lot===cancelTarget.lot))cancelTarget=null;
+ if(groups.length)el.append(renderHistoryTable(groups));
+ else{const note=document.createElement('p');note.className='hint';note.textContent='Todavía no hay lotes. Carga un título para crear el primero.';el.append(note)}
+ if(cancelTarget)renderCancelForm(cancelTarget);
+ if(others.length)el.append(renderOtherOperations(others));
 }
 $('submit').addEventListener('click',send);
-$('preview').addEventListener('click',async()=>{try{setFormAlert('');const req=await buildRequest();$('request').textContent=req.safe;setSummary('Solicitud construida localmente. Aún no se ha enviado.');status('Vista previa disponible')}catch(e){setSummary(e.message);setFormAlert(e.message)}});
+$('preview').addEventListener('click',async()=>{try{setFormAlert('');const req=await buildRequest();$('request').textContent=req.safe;setSummary(batchFiles?`Solicitud de muestra del primer XML (1 de ${batchFiles.length}). Cada archivo se enviará en una solicitud SOAP independiente; el ZIP no se envía.`:'Solicitud construida localmente. Aún no se ha enviado.');status('Vista previa disponible')}catch(e){setSummary(e.message);setFormAlert(e.message)}});
 $('downloadResponse').addEventListener('click',()=>lastResponse&&download(lastResponse,lastFilename));
 $('downloadPayload').addEventListener('click',()=>lastPayload&&download(lastPayload.bytes,`sep_descarga_${Date.now()}.${lastPayload.extension}`,'application/octet-stream'));
 const SIDEBAR_KEY='sepSidebarCollapsed';

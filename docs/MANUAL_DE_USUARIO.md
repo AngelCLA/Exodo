@@ -97,15 +97,27 @@ Botones principales:
 ### Cargar título
 
 1. Selecciona **Cargar título** en la barra lateral.
-2. En **Archivo XML generado por SATE**, pulsa **Seleccionar archivo** o arrastra el XML a la zona punteada. El archivo debe ser `.xml` y no superar el límite local inclusivo de 1 MiB (1.048.576 bytes); este límite no representa una política oficial de SEP.
-3. Verifica el nombre y el tamaño que aparecen bajo el selector.
-4. Opcionalmente, pulsa **Ver solicitud SOAP** para revisar la solicitud enmascarada.
+2. En **Archivo XML generado por SATE**, pulsa **Seleccionar archivo** o arrastra el archivo a la zona punteada. Puedes elegir un `.xml` o un `.zip` con varios XML.
+3. Verifica lo que aparece bajo el selector: el nombre y el tamaño del XML, o el nombre del ZIP y cuántos XML contiene.
+4. Opcionalmente, pulsa **Ver solicitud SOAP** para revisar la solicitud enmascarada. Con un ZIP, la vista previa corresponde al primer XML y se avisa de que cada archivo se enviará por separado.
 5. Pulsa **Enviar a SEP** (o presiona `Enter` en un campo del formulario).
-6. Revisa el resumen, el XML de respuesta y el número de lote si el servicio lo devuelve.
+6. Revisa el resumen, la tabla de cada archivo con su lote, el XML de respuesta y el número de lote si el servicio lo devuelve.
 
 Si falta un dato o el archivo no es válido, el mensaje aparece justo debajo del formulario y también en el resumen del panel derecho.
 
-La extensión comprueba que el XML sea parseable, que la raíz sea `TituloElectronico` y que tenga `folioControl`. También rechaza localmente los XML mayores de 1 MiB (1.048.576 bytes), antes de leerlos o enviarlos. No valida contra XSD.
+La extensión comprueba que cada XML sea parseable, que la raíz sea `TituloElectronico` y que tenga `folioControl`. También rechaza localmente los XML mayores de 1 MiB (1.048.576 bytes), antes de leerlos o enviarlos. No valida contra XSD.
+
+### Cargar varios títulos desde un ZIP
+
+Un ZIP con varios XML permite cargar un lote de títulos sin elegir los archivos uno por uno.
+
+1. Prepara un `.zip` con los XML generados por SATE. Puede tener subcarpetas; cada XML debe estar en formato `.xml` y no superar 1 MiB. El ZIP completo no debe superar 50 MiB.
+2. Selecciónalo o arrástralo en **Cargar título**. La extensión lo descomprime **solo en este navegador**, ignora los archivos que no son `.xml` y las carpetas internas del sistema (`__MACOSX`), y muestra cuántos XML encontró.
+3. Pulsa **Enviar a SEP**. Aparece una confirmación con el número de XML que se enviarán.
+4. Al confirmar, la extensión envía **un XML a la vez**, cada uno en su propia solicitud SOAP. La tabla del panel derecho se actualiza con el archivo, su lote y el resultado de cada envío.
+5. Al terminar, revisa el resumen: XML procesados, enviados, con error y los números de lote obtenidos. Cada envío correcto queda también en el historial.
+
+El **ZIP no se envía a la SEP** en ningún momento: solo viaja cada XML por separado. Si un XML es inválido o la respuesta de ese envío es incierta, se marca en la tabla y el resto continúa. La selección se limpia al terminar para evitar reenvíos accidentales: para corregir archivos, prepara un ZIP nuevo.
 
 ### Consultar lote
 
@@ -150,10 +162,14 @@ Si la respuesta contiene un ZIP en Base64, la extensión intentará leer el XLSX
 ### Historial de lotes
 
 1. Selecciona **Historial de lotes**.
-2. Revisa los movimientos guardados: tipo, lote o folio, fecha, HTTP, archivo y mensaje. Si hubo resultados, también verás el total, los correctos y los que tuvieron error.
-3. Usa **Consultar lote** para reutilizar un número de lote en la operación de consulta.
-4. Usa **Guardar respuesta** si el registro conserva un XML. En la versión actual el XML completo no se guarda, por lo que este botón puede no aparecer.
-5. Usa **Vaciar historial** para borrar todos los movimientos. Pide confirmación y no afecta a las credenciales.
+2. La tabla agrupa los movimientos por **número de lote** y muestra la fecha de creación (primera carga), la última consulta y la última descarga.
+3. Usa las acciones de cada fila:
+   - **Consultar**: consulta ese lote de inmediato y actualiza la fecha de consulta. La respuesta aparece en el panel derecho.
+   - **Descargar**: solicita la descarga del lote y actualiza su fecha. Si la respuesta trae un ZIP/XLSX, la tabla de resultados aparece en el panel derecho y puedes descargar el ZIP.
+   - **Cancelar**: abre un formulario en el mismo panel con folio y motivo. Si el lote tiene un solo folio registrado, se rellena automáticamente; si tiene varios, debes capturarlo. Después pide la confirmación habitual de cancelación real.
+4. Las operaciones sin número de lote, como las cancelaciones iniciadas desde su propio panel, aparecen en **Otras operaciones**, debajo de la tabla.
+
+Las acciones del historial no sustituyen los paneles de la barra lateral: si solo necesitas una operación, o prefieres capturarla a mano o previsualizar el XML antes de enviarlo, puedes seguir usando **Consultar lote**, **Descargar lote** y **Cancelar título** desde sus paneles.
 
 El historial se guarda solo en este navegador y conserva hasta 250 movimientos. Al borrar los datos de la extensión o desinstalarla también se elimina.
 
@@ -233,6 +249,10 @@ Estados del badge:
 | `Selecciona un XML generado por SATE.` | No hay archivo seleccionado. | Selecciona el XML. |
 | `Este prototipo acepta archivos .xml.` | El archivo no tiene extensión `.xml`. | Usa el XML generado por SATE. |
 | `El XML supera el límite de 1 MiB (1.048.576 bytes). No se leyó ni se envió el archivo.` | El XML supera el límite local inclusivo de 1 MiB. | Selecciona un XML más pequeño. Este límite no representa una política oficial de SEP. |
+| `El ZIP no contiene archivos .xml.` | El ZIP no incluye XML o solo contiene otros formatos. | Prepara un ZIP con los XML generados por SATE. |
+| `El ZIP supera el límite local de 50 MiB (52.428.800 bytes). No se leyó ni se envió.` | El ZIP es demasiado grande. | Divide el contenido en varios ZIP más pequeños. |
+| `El XML <archivo> supera el límite de 1 MiB (1.048.576 bytes). No se leyó ni se envió.` | Un XML dentro del ZIP supera el límite por archivo. | Revisa o reduce ese XML antes de volver a comprimir. |
+| `Archivo ZIP sin directorio central válido.` | El ZIP está dañado o se generó de forma incompleta. | Vuelve a comprimir los XML y selecciona el ZIP nuevo. |
 | `El XML no tiene el elemento TituloElectronico y su folioControl.` | El XML no es el esperado o está incompleto. | Verifica el archivo de SATE. |
 | `El número de lote debe ser un entero positivo.` | Se escribió texto o un valor inválido. | Escribe solo dígitos. |
 | `Captura folio y motivo de cancelación.` | Faltan campos de cancelación. | Completa folio y motivo. |
@@ -250,6 +270,7 @@ Estados del badge:
 | `Resultado incierto` | Timeout o pérdida de respuesta después del despacho posible. | Consulta SEP antes de reintentar. La extensión no reintenta automáticamente. |
 | `La respuesta se recibió, pero no se pudo guardar el historial` | Falló el almacenamiento local después de la respuesta. | Conserva o descarga la respuesta visible y revisa el almacenamiento del navegador. |
 | Los botones de envío están deshabilitados. | La bóveda está bloqueada. | Desbloquea la sesión. |
+| `Hay una operación en curso; espera a que termine.` | Se intentó ejecutar otra acción del historial mientras la anterior seguía en curso. | Espera el resultado de la operación actual y vuelve a intentarlo. |
 | `Sin movimientos todavía.` | El historial está vacío. | Realiza una operación. |
 | No aparece la tabla de resultados. | La respuesta no contiene un ZIP/XLSX reconocible. | Descarga el XML o el ZIP y revísalo. |
 
@@ -260,7 +281,11 @@ Estados del badge:
 - No se valida el XML contra XSD; solo se comprueba su sintaxis.
 - La detección de ZIP/XLSX es heurística y puede no funcionar con todos los lotes.
 - No hay consulta automática por lotes; la consulta es manual.
-- El historial no está cifrado y no tiene política de retención. Puede vaciarse manualmente desde la propia vista.
+- Un ZIP se envía XML por XML, de forma secuencial. No hay envío en paralelo ni reanudación: si interrumpes el proceso, los XML restantes no se envían.
+- El límite local de 50 MiB para el ZIP y de 1 MiB por XML no representan políticas oficiales de SEP.
+- El historial agrupa por lote al mostrarse. Si un lote tiene varios folios registrados, la cancelación desde el historial exige capturar el folio.
+- No hay eliminación de registros desde la interfaz: el historial se conserva. Solo se pierde al borrar los datos de la extensión o desinstalarla.
+- El historial no está cifrado y no tiene política de retención.
 - No hay soporte para móviles; es una extensión de escritorio.
 - Las pruebas automatizadas cubren bóveda, carga y estados de envío con runtime y almacenamiento simulados; no sustituyen llamadas reales a SEP ni una auditoría WCAG formal.
 
@@ -287,11 +312,8 @@ No. Es una extensión de Chrome/Edge de escritorio.
 **¿Puedo cancelar un título?**
 Sí, pero es una cancelación real. La extensión pide confirmación y no tiene deshacer.
 
-**¿Por qué no veo “Guardar respuesta” en el historial?**
-Porque el XML completo de respuesta no se persiste. El botón solo aparece si un registro conserva un XML.
-
 **¿Cómo borro el historial?**
-Abre **Historial de lotes** y pulsa **Vaciar historial**. Pide confirmación y no afecta a las credenciales. También se elimina al borrar los datos de la extensión o desinstalarla.
+La extensión no incluye una acción para borrarlo: el historial se conserva para no perder información. Solo se elimina al borrar los datos de la extensión o desinstalarla.
 
 ## Glosario
 

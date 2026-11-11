@@ -1061,8 +1061,75 @@ pre {
   margin: 0;
 }
 
-.history-toolbar button {
-  padding: 7px 11px;
+.history-table-wrap {
+  overflow-x: auto;
+}
+
+.history-table {
+  font-size: 12px;
+}
+
+.history-table th,
+.history-table td {
+  padding: 6px 7px;
+  white-space: nowrap;
+}
+
+.history-table th:last-child,
+.history-table td:last-child {
+  width: 1%;
+}
+
+.history-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+button.secondary.history-action {
+  width: 100%;
+  padding: 4px 7px;
+  font-size: 11px;
+}
+
+.history-cancel {
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid var(--error-border);
+  border-radius: var(--radius-sm);
+}
+
+.history-cancel strong {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.history-cancel .hint {
+  margin: 0 0 10px;
+}
+
+.history-cancel label {
+  margin-bottom: 8px;
+}
+
+.history-cancel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.history-other {
+  margin-top: 16px;
+}
+
+.history-other > strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text);
+  font-size: 13px;
 }
 
 .empty-state {

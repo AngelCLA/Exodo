@@ -39,7 +39,7 @@ Después sigue la [instalación](#instalación) y consulta el [manual de usuario
 - Chrome o Edge de escritorio con soporte para Manifest V3.
 - Acceso HTTPS a `https://met.sep.gob.mx/*`.
 - Credenciales SEP/MET válidas.
-- Archivo XML generado por SATE para la operación de carga.
+- Un archivo XML generado por SATE, o un ZIP que contenga varios, para la operación de carga.
 
 ## Instalación
 
@@ -55,7 +55,7 @@ Después sigue la [instalación](#instalación) y consulta el [manual de usuario
 1. **Configura la bóveda**: usuario y contraseña SEP + contraseña maestra de 12 caracteres o más.
 2. **Desbloquea** la bóveda con la contraseña maestra.
 3. Elige una operación en la barra lateral.
-4. Completa los campos o selecciona el XML. Para cargar un título, el archivo debe ser `.xml` y no superar el límite local inclusivo de 1 MiB (1.048.576 bytes); los archivos mayores se rechazan antes de leerse o enviarse. Este límite no representa una política oficial de SEP.
+4. Completa los campos o selecciona el XML. Para cargar un título puedes elegir un `.xml` o un `.zip` con varios XML: el ZIP se descomprime en el navegador y **nunca se envía**, cada XML se envía en una solicitud SOAP independiente y genera su propio lote. Cada XML debe ser `.xml` y no superar el límite local inclusivo de 1 MiB (1.048.576 bytes); los mayores se rechazan antes de leerse o enviarse. Este límite no representa una política oficial de SEP.
 5. Usa **Ver solicitud SOAP** para revisar la solicitud enmascarada, sin enviarla.
 6. Pulsa **Enviar a SEP**.
 7. Revisa el resumen, la tabla de resultados, el XML y las descargas.
@@ -66,12 +66,12 @@ El detalle paso a paso está en el [manual de usuario](docs/MANUAL_DE_USUARIO.md
 
 | Operación | Datos de entrada | Comportamiento |
 | --- | --- | --- |
-| Cargar título | XML de SATE de hasta 1 MiB | Comprueba que el XML sea parseable, que la raíz sea `TituloElectronico` y que tenga `folioControl`. El límite local inclusivo es 1 MiB (1.048.576 bytes); un archivo mayor se rechaza antes de leerse o enviarse. Envía el nombre del archivo y su contenido en Base64. Este límite no representa una política oficial de SEP. |
+| Cargar título | Uno o varios XML de SATE (`.xml` o `.zip`) de hasta 1 MiB cada uno | Comprueba que cada XML sea parseable, que la raíz sea `TituloElectronico` y que tenga `folioControl`. El límite local inclusivo es 1 MiB (1.048.576 bytes) por XML; uno mayor se rechaza antes de leerse o enviarse. Un `.zip` de hasta 50 MiB se descomprime localmente, se filtran sus `.xml` y se envía **una solicitud SOAP por XML**, con el nombre y el contenido Base64 de cada archivo; el ZIP nunca se transmite. Los XML inválidos se reportan y no bloquean al resto. Este límite no representa una política oficial de SEP. |
 | Consultar lote | Número de lote | Valida un entero positivo. Puede detectar un ZIP en Base64 dentro de la respuesta. |
 | Descargar lote | Número de lote | Igual que consulta; si detecta un ZIP, intenta leer el XLSX y mostrar la tabla de resultados. |
 | Cancelar título | Folio de control + motivo | Pide confirmación explícita antes de enviar una cancelación real. |
 | Cancelar por institución | Folio + clave de institución + motivo | Pide confirmación explícita antes de enviar una cancelación real. |
-| Historial de lotes | — | Muestra hasta 250 movimientos guardados en el navegador. Permite reutilizar un lote para consultarlo. |
+| Historial de lotes | — | Tabla agrupada por número de lote con fecha de creación, última consulta y última descarga, más acciones **Consultar**, **Descargar** y **Cancelar** que se ejecutan en el mismo panel. Conserva hasta 250 movimientos locales y muestra aparte las operaciones sin lote. |
 
 ## Estructura del proyecto
 
@@ -166,6 +166,8 @@ sequenceDiagram
 
 - Se guarda en `chrome.storage.local`, sin cifrado a nivel de aplicación.
 - Conserva hasta 250 movimientos con metadatos y resultados parseados.
+- La vista agrupa esos movimientos por número de lote al mostrarlos (creación, última consulta, última descarga) sin cambiar el formato almacenado.
+- Las acciones del historial reutilizan las mismas solicitudes SOAP que los paneles laterales y registran el resultado de cada ejecución.
 - El XML SOAP completo de respuesta **no se persiste**; el campo `response` de los registros nuevos queda vacío.
 - El XML de solicitud no se persiste.
 - El historial puede contener datos personales. Se recomienda un perfil institucional controlado, evitar equipos compartidos y definir una política de retención.
@@ -203,6 +205,7 @@ Al desinstalar la extensión o borrar sus datos de extensión se eliminan la bó
 - Panel de **Configuración**: permite definir un nombre institucional local de hasta 120 caracteres; **Guardar nombre** y **Usar identidad genérica** guardan o restablecen esa preferencia. No son credenciales y no modifican las solicitudes SOAP.
 - Área de trabajo a altura completa en escritorio: paneles igualados, zona de carga que aprovecha el alto y resultados flexibles.
 - Panel de respuesta con resumen, tabla de resultados, XML y descargas.
+- **Historial de lotes** en tabla: agrupa por lote, muestra fechas de creación/consulta/descarga y ofrece las acciones **Consultar**, **Descargar** y **Cancelar** sin salir del panel; los paneles individuales siguen disponibles para operar a mano.
 - Acceso institucional en la cabecera: se expande al configurar o desbloquear y se reduce a **● usuario · Bloquear** al abrir la sesión. Pulsa el usuario para acceder a **Cambiar credenciales** o **Olvidé la contraseña maestra / borrar credenciales**. El aviso de cifrado aparece una sola vez, dentro del desplegable.
 - Avisos inline de validación y estado de envío con spinner.
 - Diseño responsive para ventanas angostas.
@@ -213,7 +216,7 @@ Al desinstalar la extensión o borrar sus datos de extensión se eliminan la bó
 - `node --check app.js` sin errores de sintaxis.
 - Auditoría de IDs: los IDs estáticos referenciados por `app.js` existen en `index.html`; `file`, `fileinfo`, `history` y `numeroLote` se crean dinámicamente en `setTab`.
 - Renderizado revisado con Chrome headless en 1440, 760 y 500 px, con `chrome.storage` simulado, para los estados de bóveda, resultados, historial y XML abierto.
-- `node --test tests/credentials.test.cjs`: pruebas automatizadas del acceso institucional mediante DOM y almacenamiento simulados, con cifrado real de datos de prueba. No requiere dependencias ni build. Estas pruebas no sustituyen una comprobación visual en Chrome/Edge.
+- `node --test "tests/*.test.cjs"`: pruebas automatizadas del acceso institucional, la carga (archivo único y ZIP con varios XML), el historial por lote, la identidad, el diseño y los estados de envío mediante DOM y almacenamiento simulados, con cifrado real de datos de prueba. No requiere dependencias ni build. Estas pruebas no sustituyen una comprobación visual en Chrome/Edge.
 - Las pruebas automatizadas usan runtime y almacenamiento simulados y no sustituyen las pruebas reales reportadas por el usuario. No se realizan llamadas reales a SEP desde esta verificación.
 - La privacidad depende también del perfil y equipo local: bóveda e historial pueden contener información sensible. Este proyecto no afirma una auditoría de seguridad.
 
