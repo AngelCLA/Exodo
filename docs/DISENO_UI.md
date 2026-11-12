@@ -254,7 +254,7 @@ En **Cancelar título** y **Cancelar por institución**, sobre el formulario apa
 
 - Respuesta: “Los resultados aparecerán aquí…”.
 - Resultados: placeholder `.results-empty` con “Aquí aparecerá la tabla de resultados del lote.”.
-- Resultados sin filas: “El Excel no contiene registros.” cuando el XLSX no tiene filas.
+- Resultados sin filas: “El Excel no contiene registros.” cuando el libro XLS/XLSX no tiene filas.
 - Historial: bloque `.empty-state` con “Sin movimientos todavía.” y una explicación de dónde se guardan.
 
 ## Responsive

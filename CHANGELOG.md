@@ -2,6 +2,18 @@
 
 Cambios relevantes de Éxodo. El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el versionado [SemVer](https://semver.org/lang/es/).
 
+## [Sin publicar]
+
+### Añadido
+
+- **Vista previa de resultados en formato XLS.** Si el ZIP de resultados contiene un libro de Excel 97-2003 (`.xls`), la extensión lo lee localmente y muestra en pantalla la tabla con **Archivo**, **Estatus**, **Descripción** y **Folio control**, igual que con `.xlsx`. Ya no hace falta descargar el ZIP para ver el resultado; la descarga sigue disponible para conservar el archivo original.
+- Pruebas con libros `.xls` y `.xlsx` reales (`tests/xls-results.test.cjs`) que cubren la lectura local y la descarga de un lote.
+
+### Cambiado
+
+- El lector de Excel comparte la detección de columnas entre XLS y XLSX y valida el formato del libro para no mostrar datos incorrectos.
+- README, manual de usuario y mensajes de error actualizados para mencionar ambos formatos.
+
 ## [1.1.0] - 2026-11-11
 
 ### Añadido

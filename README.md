@@ -69,7 +69,7 @@ El detalle paso a paso está en el [manual de usuario](docs/MANUAL_DE_USUARIO.md
 | --- | --- | --- |
 | Cargar título | Uno o varios XML de SATE (`.xml` o `.zip`) de hasta 1 MiB cada uno | Comprueba que cada XML sea parseable, que la raíz sea `TituloElectronico` y que tenga `folioControl`. El límite local inclusivo es 1 MiB (1.048.576 bytes) por XML; uno mayor se rechaza antes de leerse o enviarse. Un `.zip` de hasta 50 MiB se descomprime localmente, se filtran sus `.xml` y se envía **una solicitud SOAP por XML**, con el nombre y el contenido Base64 de cada archivo; el ZIP nunca se transmite. Los XML inválidos se reportan y no bloquean al resto. Este límite no representa una política oficial de SEP. |
 | Consultar lote | Número de lote | Valida un entero positivo. Puede detectar un ZIP en Base64 dentro de la respuesta. |
-| Descargar lote | Número de lote | Igual que consulta; si detecta un ZIP, intenta leer el XLSX y mostrar la tabla de resultados. |
+| Descargar lote | Número de lote | Igual que consulta; si detecta un ZIP, lee el Excel (`.xls` o `.xlsx`) y muestra la tabla de resultados en pantalla sin obligarte a descargar el ZIP. |
 | Cancelar título | Folio de control + motivo | Pide confirmación explícita antes de enviar una cancelación real. |
 | Cancelar por institución | Folio + clave de institución + motivo | Pide confirmación explícita antes de enviar una cancelación real. |
 | Historial de lotes | — | Tabla agrupada por número de lote con fecha de creación, última consulta y última descarga, más acciones **Consultar**, **Descargar** y **Cancelar** que se ejecutan en el mismo panel. Conserva hasta 250 movimientos locales y muestra aparte las operaciones sin lote. |
@@ -82,7 +82,7 @@ CLA-Titulos-SEP/
 ├─ background.js          Envío SOAP, allowlist del endpoint y timeout
 ├─ index.html             Estructura de la interfaz
 ├─ style.css              Tema institucional y estilos responsive
-├─ app.js                 Estado de la UI, SOAP, ZIP/XLSX, bóveda e historial
+├─ app.js                 Estado de la UI, SOAP, ZIP/XLS, bóveda e historial
 ├─ assets/                Recursos locales de la interfaz
 ├─ tests/                 Pruebas deterministas con dobles locales
 ├─ design/                Sistema visual y propuestas de componentes
@@ -101,7 +101,7 @@ CLA-Titulos-SEP/
 | `background.js` | Recibe mensajes `{ type: "SOAP", endpoint, xml }`, valida que el endpoint sea exactamente `https://met.sep.gob.mx/met-ws/services/`, hace el `POST` y devuelve `{ ok, status, xml, ms }` o un error `{ ok: false, uncertain: true, error, ms }` cuando no puede confirmar el resultado del transporte. |
 | `index.html` | Header, navegación lateral, paneles de operación y respuesta, bóveda y contenedores de resultados. |
 | `style.css` | Tokens de la paleta institucional, componentes, estados y breakpoints. |
-| `app.js` | Cambio de pestañas, construcción de solicitudes, vista previa enmascarada, envío, resumen, detección de ZIP, lectura de XLSX, bóveda cifrada e historial. |
+| `app.js` | Cambio de pestañas, construcción de solicitudes, vista previa enmascarada, envío, resumen, detección de ZIP, lectura de XLS/XLSX, bóveda cifrada e historial. |
 
 ## Arquitectura y flujo
 
@@ -121,7 +121,7 @@ sequenceDiagram
     BG->>SEP: POST HTTPS (timeout 45 s)
     SEP-->>BG: XML de respuesta
     BG-->>UI: { ok, status, xml, ms }
-    UI->>UI: Resumen, XML y detección ZIP/XLSX
+    UI->>UI: Resumen, XML y detección ZIP/Excel
     UI->>UI: Guarda metadatos en historial local
 ```
 
@@ -147,9 +147,9 @@ sequenceDiagram
 
 - El resumen intenta extraer `numeroLote`, `faultstring`/`Text`, `estatusLote`/`codigo`/`codigoRespuesta`/`estatus` y `mensaje`/`mensajeRespuesta`/`descripcion`.
 - La detección de ZIP es heurística: busca un elemento Base64 que empiece por `UEs` y cuyos primeros bytes sean la firma ZIP (`PK`).
-- Si el ZIP contiene un XLSX, se lee localmente en el navegador. Se buscan las columnas **Archivo**, **Estatus**, **Descripción** y **Folio control**.
+- Si el ZIP contiene un Excel (`.xls` de Excel 97-2003 o `.xlsx`), se lee localmente en el navegador, sin subirlo a ningún servidor. Se buscan las columnas **Archivo**, **Estatus**, **Descripción** y **Folio control**.
 - Los estatus `1` y `2` se muestran como correcto y error, respectivamente, según el flujo operativo descrito.
-- La tabla muestra hasta 2000 filas. El ZIP se puede descargar aunque el XLSX no se pueda interpretar.
+- La tabla muestra hasta 2000 filas. El ZIP se puede descargar aunque el Excel no se pueda interpretar.
 - Estas heurísticas no garantizan que todos los lotes usen el mismo formato.
 
 ## Seguridad y privacidad

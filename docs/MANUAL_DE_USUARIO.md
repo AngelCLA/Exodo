@@ -127,7 +127,7 @@ El **ZIP no se envía a la SEP** en ningún momento: solo viaja cada XML por sep
 4. Pulsa **Enviar a SEP**.
 5. Revisa el estado, el resumen y el XML.
 
-Si la respuesta contiene un ZIP en Base64, la extensión intentará leer el XLSX y mostrar la tabla de resultados.
+Si la respuesta contiene un ZIP en Base64, la extensión intentará leer el Excel (`.xls` o `.xlsx`) y mostrar la tabla de resultados.
 
 ### Descargar lote
 
@@ -135,7 +135,7 @@ Si la respuesta contiene un ZIP en Base64, la extensión intentará leer el XLSX
 2. Escribe el número de lote.
 3. Pulsa **Enviar a SEP**.
 4. Si se detecta un ZIP, aparecerá **Descargar ZIP de resultados**.
-5. Si el ZIP contiene un XLSX reconocible, se mostrará la tabla.
+5. Si el ZIP contiene un Excel reconocible (`.xls` o `.xlsx`), la tabla se mostrará en pantalla, sin necesidad de descargar el ZIP.
 
 ### Cancelar título
 
@@ -165,7 +165,7 @@ Si la respuesta contiene un ZIP en Base64, la extensión intentará leer el XLSX
 2. La tabla agrupa los movimientos por **número de lote** y muestra la fecha de creación (primera carga), la última consulta y la última descarga.
 3. Usa las acciones de cada fila:
    - **Consultar**: consulta ese lote de inmediato y actualiza la fecha de consulta. La respuesta aparece en el panel derecho.
-   - **Descargar**: solicita la descarga del lote y actualiza su fecha. Si la respuesta trae un ZIP/XLSX, la tabla de resultados aparece en el panel derecho y puedes descargar el ZIP.
+   - **Descargar**: solicita la descarga del lote y actualiza su fecha. Si la respuesta trae un ZIP con Excel, la tabla de resultados aparece en el panel derecho, sin obligarte a descargar el archivo.
    - **Cancelar**: abre un formulario en el mismo panel con folio y motivo. Si el lote tiene un solo folio registrado, se rellena automáticamente; si tiene varios, debes capturarlo. Después pide la confirmación habitual de cancelación real.
 4. Las operaciones sin número de lote, como las cancelaciones iniciadas desde su propio panel, aparecen en **Otras operaciones**, debajo de la tabla.
 
@@ -194,7 +194,7 @@ El panel de respuesta muestra:
 
 ### Tabla de resultados
 
-Cuando la respuesta contiene un ZIP con un XLSX reconocible, se muestra una tabla con:
+Cuando la respuesta contiene un ZIP con un libro Excel reconocible (`.xls` o `.xlsx`), se muestra una tabla con:
 
 | Columna | Contenido |
 | --- | --- |
@@ -203,7 +203,7 @@ Cuando la respuesta contiene un ZIP con un XLSX reconocible, se muestra una tabl
 | Descripción | Mensaje del servicio. |
 | Folio control | Folio del título. |
 
-La tabla muestra hasta 2000 filas. En ventanas angostas puede requerir desplazamiento horizontal. Si el XLSX no tiene las columnas esperadas, se muestra un mensaje y puedes descargar el ZIP original.
+La tabla muestra hasta 2000 filas. En ventanas angostas puede requerir desplazamiento horizontal. Si el Excel no tiene las columnas esperadas o usa un formato no compatible, se muestra un mensaje y puedes descargar el ZIP original.
 
 ### XML
 
@@ -262,8 +262,8 @@ Estados del badge:
 | `Las contraseñas maestras no coinciden.` | La confirmación es distinta. | Repite la misma contraseña. |
 | `Completa usuario y contraseña de SEP.` | Campos vacíos al configurar. | Completa ambos campos. |
 | `No hay credenciales guardadas.` | No existe una bóveda. | Configura la bóveda. |
-| `El ZIP no contiene un libro Excel XLSX reconocible.` | El ZIP no incluye un XLSX o usa otro formato. | Descarga el ZIP y revísalo. |
-| `Se encontró Excel, pero no las columnas Archivo, Estatus, Descripción y Folio control.` | El XLSX usa otros nombres u orden. | Revisa el archivo; la tabla no se puede mostrar. |
+| `El ZIP no contiene un libro Excel (.xls o .xlsx) reconocible.` | El ZIP no incluye un libro de Excel o usa otro formato. | Descarga el ZIP y revísalo. |
+| `Se encontró Excel, pero no las columnas Archivo, Estatus, Descripción y Folio control.` | El Excel usa otros nombres u orden. | Revisa el archivo; la tabla no se puede mostrar. |
 | `Error de conexión` o `Error HTTP o SOAP` | Red, endpoint, credenciales o servicio. | Revisa la conexión, las credenciales y el XML completo. Si hay XML, la respuesta se conserva. |
 | `La respuesta no es XML válido` | El servicio devolvió HTML u otro formato. | Revisa el estado HTTP y el XML de respuesta. |
 | `No se envió` | Falló una validación local antes del despacho. | Corrige los datos. Si rechazas una cancelación, la interfaz conserva el estado visible anterior y no envía la operación. |
@@ -272,14 +272,14 @@ Estados del badge:
 | Los botones de envío están deshabilitados. | La bóveda está bloqueada. | Desbloquea la sesión. |
 | `Hay una operación en curso; espera a que termine.` | Se intentó ejecutar otra acción del historial mientras la anterior seguía en curso. | Espera el resultado de la operación actual y vuelve a intentarlo. |
 | `Sin movimientos todavía.` | El historial está vacío. | Realiza una operación. |
-| No aparece la tabla de resultados. | La respuesta no contiene un ZIP/XLSX reconocible. | Descarga el XML o el ZIP y revísalo. |
+| No aparece la tabla de resultados. | La respuesta no contiene un ZIP con Excel reconocible. | Descarga el XML o el ZIP y revísalo. |
 
 ## Limitaciones conocidas
 
 - No se documentó una validación formal en producción ni contra el WSDL completo; el usuario sí reportó pruebas reales exitosas de las operaciones descritas al inicio.
 - `SOAPAction`, namespaces y campos de respuesta están pendientes de validar contra el WSDL.
 - No se valida el XML contra XSD; solo se comprueba su sintaxis.
-- La detección de ZIP/XLSX es heurística y puede no funcionar con todos los lotes.
+- La detección de ZIP y la lectura de Excel (`.xls`/`.xlsx`) son heurísticas y pueden no funcionar con todos los lotes.
 - No hay consulta automática por lotes; la consulta es manual.
 - Un ZIP se envía XML por XML, de forma secuencial. No hay envío en paralelo ni reanudación: si interrumpes el proceso, los XML restantes no se envían.
 - El límite local de 50 MiB para el ZIP y de 1 MiB por XML no representan políticas oficiales de SEP.
@@ -301,7 +301,7 @@ No se puede recuperar. Usa **Olvidé la contraseña maestra / borrar credenciale
 No. Se guarda en el perfil del navegador y puede contener datos personales.
 
 **¿La extensión envía datos a terceros?**
-No hay analítica ni backend propio. En una operación autorizada, las credenciales y el XML necesario se envían al endpoint oficial de SEP/MET; el ZIP/XLSX, la bóveda y el historial se procesan o guardan localmente.
+No hay analítica ni backend propio. En una operación autorizada, las credenciales y el XML necesario se envían al endpoint oficial de SEP/MET; el ZIP/Excel, la bóveda y el historial se procesan o guardan localmente.
 
 **¿Puedo usarla en el celular?**
 No. Es una extensión de Chrome/Edge de escritorio.
@@ -322,7 +322,8 @@ La extensión no incluye una acción para borrarlo: el historial se conserva par
 - **Lote:** número que agrupa un envío o procesamiento.
 - **SOAP:** protocolo de mensajería basado en XML.
 - **XML:** formato de datos usado en la solicitud y la respuesta.
-- **XLSX:** libro de Excel que puede venir dentro del ZIP de resultados.
+- **XLS:** libro de Excel 97-2003 que puede venir dentro del ZIP de resultados.
+- **XLSX:** libro de Excel (OOXML) que puede venir dentro del ZIP de resultados.
 - **ZIP:** archivo comprimido que puede contener los resultados del lote.
 - **SATE:** sistema que genera el XML de entrada.
 - **SEP:** Secretaría de Educación Pública.

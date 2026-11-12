@@ -224,14 +224,7 @@ function spreadsheetRows(sheet,shared){
   }rows.push(result);
  }return rows;
 }
-async function readExcelFromZip(bytes){
- const entries=zipEntries(bytes),sheet=entries.find(e=>/^xl\/worksheets\/sheet[0-9]+\.xml$/.test(e.name));
- if(!sheet)throw Error('El ZIP no contiene un libro Excel XLSX reconocible.');
- const sharedEntry=entries.find(e=>e.name==='xl/sharedStrings.xml');let shared=[];
- if(sharedEntry){const doc=parseXML(new TextDecoder().decode(await unzipEntry(bytes,sharedEntry)));
-  shared=nsText(doc,'si').map(si=>nsText(si,'t').map(n=>n.textContent).join(''))}
- const xml=parseXML(new TextDecoder().decode(await unzipEntry(bytes,sheet)));
- const rows=spreadsheetRows(xml,shared).filter(r=>r.some(v=>String(v??'').trim()));
+function excelResultRows(rows){
  const normalize=t=>String(t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
  let h=-1,columns=[];
  for(let i=0;i<Math.min(rows.length,30);i++){
@@ -241,6 +234,172 @@ async function readExcelFromZip(bytes){
  }
  if(h<0)throw Error('Se encontró Excel, pero no las columnas Archivo, Estatus, Descripción y Folio control.');
  return rows.slice(h+1).filter(r=>r.some(v=>String(v??'').trim())).map(r=>({archivo:r[columns[0]]||'',estatus:String(r[columns[1]]||''),descripcion:r[columns[2]]||'',folio:r[columns[3]]||''}));
+}
+const OLE_SIGNATURE=[0xd0,0xcf,0x11,0xe0,0xa1,0xb1,0x1a,0xe1];
+function oleStreams(bytes){
+ if(bytes.length<512||!OLE_SIGNATURE.every((b,i)=>bytes[i]===b))throw Error('El archivo .xls no es un libro de Excel reconocible.');
+ const d=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength),sectorSize=1<<d.getUint16(30,true),miniSize=1<<d.getUint16(32,true);
+ if(sectorSize<512||sectorSize>4096||miniSize<8||miniSize>sectorSize)throw Error('El archivo .xls tiene una cabecera OLE inválida.');
+ const fatCount=d.getUint32(44,true),dirStart=d.getUint32(48,true),cutoff=d.getUint32(56,true),miniFatStart=d.getUint32(60,true),miniFatCount=d.getUint32(64,true),difatStart=d.getUint32(68,true),difatCount=d.getUint32(72,true);
+ if(fatCount>65536||miniFatCount>65536||difatCount>65536)throw Error('El archivo .xls tiene una tabla de sectores inválida.');
+ const sectorOffset=s=>{const o=(s+1)*sectorSize;if(o+sectorSize>bytes.length)throw Error('El archivo .xls está incompleto.');return o};
+ const fatSectors=[];
+ for(let i=0;i<109&&fatSectors.length<fatCount;i++){const s=d.getUint32(76+i*4,true);if(s<0xfffffffa)fatSectors.push(s)}
+ let difat=difatStart;
+ for(let guard=0;fatSectors.length<fatCount&&difat<0xfffffffa&&guard<=difatCount;guard++){
+  const o=sectorOffset(difat),per=sectorSize/4-1;
+  for(let i=0;i<per&&fatSectors.length<fatCount;i++){const s=d.getUint32(o+i*4,true);if(s<0xfffffffa)fatSectors.push(s)}
+  difat=d.getUint32(o+per*4,true);
+ }
+ const fat=[];
+ for(const s of fatSectors){const o=sectorOffset(s);for(let i=0;i<sectorSize/4;i++)fat.push(d.getUint32(o+i*4,true))}
+ const chain=start=>{
+  const list=[],seen=new Set();let s=start;
+  while(s<0xfffffffa){if(seen.has(s)||s>=fat.length||list.length>65536)throw Error('El archivo .xls tiene una cadena de sectores inválida.');seen.add(s);list.push(s);s=fat[s]}
+  return list;
+ };
+ const chainBytes=(start,size)=>{
+  const list=chain(start),out=new Uint8Array(size===undefined?list.length*sectorSize:Math.min(size,list.length*sectorSize));
+  let written=0;
+  for(const s of list){if(written>=out.length)break;const o=sectorOffset(s),take=Math.min(sectorSize,out.length-written);out.set(bytes.subarray(o,o+take),written);written+=take}
+  return out;
+ };
+ const dirBytes=chainBytes(dirStart),dv=new DataView(dirBytes.buffer,dirBytes.byteOffset,dirBytes.byteLength),entries=[];
+ for(let o=0;o+128<=dirBytes.length;o+=128){
+  const type=dirBytes[o+66];if(type!==2&&type!==5)continue;
+  const length=dv.getUint16(o+64,true);if(length<2||length>64)continue;
+  let name='';for(let i=0;i<length-2;i+=2)name+=String.fromCharCode(dirBytes[o+i]|(dirBytes[o+i+1]<<8));
+  entries.push({name,type,start:dv.getUint32(o+116,true),size:dv.getUint32(o+120,true)});
+ }
+ const root=entries.find(e=>e.type===5);
+ const miniFatBytes=miniFatCount?chainBytes(miniFatStart,miniFatCount*sectorSize):new Uint8Array(0);
+ const miniFat=new DataView(miniFatBytes.buffer,miniFatBytes.byteOffset,miniFatBytes.byteLength);
+ const miniStream=root?chainBytes(root.start,root.size):new Uint8Array(0);
+ return entries.filter(e=>e.type===2).map(entry=>{
+  if(!entry.size)return {name:entry.name,data:new Uint8Array(0)};
+  if(entry.size<cutoff){
+   const out=new Uint8Array(entry.size),seen=new Set();let s=entry.start,written=0;
+   while(written<entry.size&&s<0xfffffffa){
+    if(seen.has(s)||s*miniSize+miniSize>miniStream.length)throw Error('El archivo .xls tiene un flujo interno inválido.');
+    seen.add(s);const take=Math.min(miniSize,entry.size-written);out.set(miniStream.subarray(s*miniSize,s*miniSize+take),written);written+=take;s=miniFat.getUint32(s*4,true);
+   }
+   if(written<entry.size)throw Error('El archivo .xls está incompleto.');
+   return {name:entry.name,data:out};
+  }
+  return {name:entry.name,data:chainBytes(entry.start,entry.size)};
+ });
+}
+function biffChars(bytes,p,limit){
+ const d=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
+ if(limit<3)return '';
+ const cch=d.getUint16(p,true),flags=bytes[p+2];let o=p+3,out='';
+ if(flags&1){for(let i=0;i<cch&&o+1<p+limit;i++,o+=2)out+=String.fromCharCode(bytes[o]|(bytes[o+1]<<8))}
+ else{for(let i=0;i<cch&&o<p+limit;i++,o++)out+=String.fromCharCode(bytes[o])}
+ return out;
+}
+function rkNumber(rk){
+ if(rk&1)return ((rk&2)?(rk|0)>>2:rkFloat(rk))/100;
+ return (rk&2)?(rk|0)>>2:rkFloat(rk);
+}
+function rkFloat(rk){const buffer=new ArrayBuffer(8),d=new DataView(buffer);d.setUint32(4,rk&0xfffffffc);return d.getFloat64(0)}
+function sstStrings(chunks){
+ let ci=0,pos=0;
+ const next=()=>{ci++;pos=0;if(ci>=chunks.length)throw Error('El libro de Excel tiene textos compartidos incompletos.')};
+ const u8=()=>{if(pos>=chunks[ci].length)next();return chunks[ci][pos++]};
+ const u16=()=>u8()|(u8()<<8);
+ const u32=()=>(u16()|(u16()<<16))>>>0;
+ const chars=(cch,high)=>{
+  let out='',left=cch;
+  while(left>0){
+   if(pos>=chunks[ci].length)next();
+   const step=high?2:1,available=Math.floor((chunks[ci].length-pos)/step),chunk=chunks[ci];
+   if(available<=0)throw Error('El libro de Excel tiene textos compartidos inválidos.');
+   const take=Math.min(left,available);
+   if(high){for(let i=0;i<take;i++){out+=String.fromCharCode(chunk[pos]|(chunk[pos+1]<<8));pos+=2}}
+   else{for(let i=0;i<take;i++)out+=String.fromCharCode(chunk[pos++])}
+   left-=take;
+   if(left>0){next();high=(u8()&1)!==0}
+  }
+  return out;
+ };
+ const skip=n=>{let left=n;while(left>0){if(pos>=chunks[ci].length)next();const take=Math.min(left,chunks[ci].length-pos);pos+=take;left-=take}};
+ u32();
+ const unique=u32(),list=[];
+ if(unique>100000)throw Error('El libro de Excel tiene demasiados textos compartidos.');
+ for(let n=0;n<unique;n++){
+  const cch=u16(),flags=u8(),runs=(flags&8)?u16():0,extra=(flags&4)?u32():0;
+  list.push(chars(cch,(flags&1)!==0));
+  skip(runs*4+extra);
+ }
+ return list;
+}
+function readLegacyExcelRows(bytes){
+ const streams=oleStreams(bytes),book=streams.find(s=>/^workbook$/i.test(s.name))||streams.find(s=>/^book$/i.test(s.name));
+ if(!book)throw Error('El archivo .xls no contiene un libro de Excel reconocible.');
+ const data=book.data,d=new DataView(data.buffer,data.byteOffset,data.byteLength),records=[];let o=0;
+ while(o+4<=data.length&&records.length<200000){const type=d.getUint16(o,true),length=d.getUint16(o+2,true);if(o+4+length>data.length)break;records.push({type,start:o+4,length});o+=4+length}
+ if(!records.length||records[0].type!==0x0809||d.getUint16(records[0].start,true)<0x0600)throw Error('El archivo .xls no usa el formato Excel 97-2003 (BIFF8).');
+ let shared=[],sstError=null,sheet=null;
+ for(let i=0;i<records.length;i++){
+  const rec=records[i];
+  if(rec.type===0x0085&&!sheet){
+   const offset=d.getUint32(rec.start,true),cch=data[rec.start+6],flags=data[rec.start+7];let name='',p=rec.start+8;
+   if(flags&1){for(let k=0;k<cch;k++,p+=2)name+=String.fromCharCode(data[p]|(data[p+1]<<8))}
+   else{for(let k=0;k<cch;k++,p++)name+=String.fromCharCode(data[p])}
+   sheet={name,offset};
+  }else if(rec.type===0x00fc){
+   const chunks=[data.subarray(rec.start,rec.start+rec.length)];
+   let j=i+1;for(;j<records.length&&records[j].type===0x003c;j++)chunks.push(data.subarray(records[j].start,records[j].start+records[j].length));
+   try{shared=sstStrings(chunks)}catch(e){sstError=e}
+   i=j-1;
+  }else if(rec.type===0x002f)throw Error('El libro de Excel está protegido con contraseña.');
+  else if(rec.type===0x000a)break;
+ }
+ if(sstError)throw sstError;
+ if(!sheet)throw Error('El libro de Excel no contiene hojas.');
+ const rows=new Map();
+ let pendingString=null;
+ o=sheet.offset;
+ for(let guard=0;o+4<=data.length&&guard<500000;guard++){
+  const type=d.getUint16(o,true),length=d.getUint16(o+2,true);
+  if(o+4+length>data.length)break;
+  const p=o+4;
+  const set=(r,c,v)=>{if(r>65535||c>255)return;let row=rows.get(r);if(!row)rows.set(r,row=new Map());row.set(c,v)};
+  if(type===0x00fd)set(d.getUint16(p,true),d.getUint16(p+2,true),shared[d.getUint32(p+6,true)]??'');
+  else if(type===0x0204||type===0x00d6)set(d.getUint16(p,true),d.getUint16(p+2,true),biffChars(data,p+6,length-6));
+  else if(type===0x0203)set(d.getUint16(p,true),d.getUint16(p+2,true),d.getFloat64(p+6,true));
+  else if(type===0x027e)set(d.getUint16(p,true),d.getUint16(p+2,true),rkNumber(d.getUint32(p+6,true)));
+  else if(type===0x00bd){
+   const r=d.getUint16(p,true),first=d.getUint16(p+2,true),count=Math.max(0,Math.floor((length-6)/6));
+   for(let k=0;k<count;k++)set(r,first+k,rkNumber(d.getUint32(p+6+k*6,true)));
+  }else if(type===0x0205)set(d.getUint16(p,true),d.getUint16(p+2,true),data[p+7]?'#ERROR':data[p+6]?'VERDADERO':'FALSO');
+  else if(type===0x0006){
+   const r=d.getUint16(p,true),c=d.getUint16(p+2,true);
+   if(d.getUint16(p+6,true)!==0xffff)set(r,c,d.getFloat64(p+6,true));
+   else{const kind=data[p+8];if(kind===0)pendingString={r,c};else if(kind===1)set(r,c,data[p+9]?'VERDADERO':'FALSO');else set(r,c,'')}
+  }else if(type===0x0207&&pendingString){set(pendingString.r,pendingString.c,biffChars(data,p,length));pendingString=null}
+  o+=4+length;
+  if(type===0x000a)break;
+ }
+ let last=-1;for(const key of rows.keys())if(key>last)last=key;
+ return Array.from({length:last+1},(_,r)=>{
+  const row=rows.get(r);if(!row)return [];
+  let width=-1;for(const key of row.keys())if(key>width)width=key;
+  return Array.from({length:width+1},(_,c)=>row.get(c)??'');
+ });
+}
+async function readExcelFromZip(bytes){
+ const entries=zipEntries(bytes),sheet=entries.find(e=>/^xl\/worksheets\/sheet[0-9]+\.xml$/.test(e.name));
+ if(sheet){
+  const sharedEntry=entries.find(e=>e.name==='xl/sharedStrings.xml');let shared=[];
+  if(sharedEntry){const doc=parseXML(new TextDecoder().decode(await unzipEntry(bytes,sharedEntry)));
+   shared=nsText(doc,'si').map(si=>nsText(si,'t').map(n=>n.textContent).join(''))}
+  const xml=parseXML(new TextDecoder().decode(await unzipEntry(bytes,sheet)));
+  return excelResultRows(spreadsheetRows(xml,shared).filter(r=>r.some(v=>String(v??'').trim())));
+ }
+ const legacy=entries.find(e=>/\.xlsx?$/i.test(e.name)&&!/(^|\/)__MACOSX\//.test(e.name)&&!/(^|\/)\._/.test(e.name));
+ if(legacy)return excelResultRows(readLegacyExcelRows(await unzipEntry(bytes,legacy)));
+ throw Error('El ZIP no contiene un libro Excel (.xls o .xlsx) reconocible.');
 }
 function showResults(results){
  const el=$('results');el.replaceChildren();if(!results.length){el.textContent='El Excel no contiene registros.';return}
