@@ -324,7 +324,7 @@ main {
 
 .columns {
   display: grid;
-  grid-template-columns: minmax(360px, 5fr) minmax(320px, 7fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: start;
   gap: 20px;
   max-width: none;
@@ -1082,14 +1082,54 @@ pre {
 
 .history-actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+  flex-wrap: nowrap;
+  gap: 6px;
 }
 
 button.secondary.history-action {
-  width: 100%;
-  padding: 4px 7px;
-  font-size: 11px;
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-color: var(--accent-subtle);
+  background: var(--accent-subtle);
+  color: var(--accent);
+}
+
+button.secondary.history-action:hover {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+  color: var(--accent-hover);
+}
+
+button.secondary.history-action[data-action="cancelar"] {
+  border-color: var(--error-border);
+  background: var(--error-surface);
+  color: var(--error);
+}
+
+button.secondary.history-action[data-action="cancelar"]:hover,
+button.secondary.history-action[data-action="cancelar"]:active {
+  border-color: var(--error);
+  background: var(--error-surface);
+  color: var(--error);
+}
+
+button.secondary.history-action:active {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+  color: var(--accent-hover);
+}
+
+button.secondary.history-action svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .history-cancel {

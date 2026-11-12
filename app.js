@@ -562,8 +562,15 @@ function lotGroups(history){
  }
  return [...groups.values()].sort((a,b)=>String(b.createdAt||b.consultedAt||b.downloadedAt||'').localeCompare(String(a.createdAt||a.consultedAt||a.downloadedAt||'')));
 }
+const HISTORY_ICONS={
+ consulta:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/>',
+ descarga:'<path d="M12 4v12"/><path d="m7 11 5 5 5-5"/><path d="M4 20h16"/>',
+ cancelar:'<path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5"/><path d="m9.5 13.5 5 5"/><path d="m14.5 13.5-5 5"/>'
+};
 function historyActionButton(label,action,group){
- const btn=document.createElement('button');btn.type='button';btn.className='secondary history-action';btn.textContent=label;btn.dataset.action=action;btn.dataset.lot=group.lot;
+ const btn=document.createElement('button');btn.type='button';btn.className='secondary history-action';btn.dataset.action=action;btn.dataset.lot=group.lot;
+ btn.setAttribute('aria-label',label);btn.title=label;
+ btn.innerHTML=`<svg viewBox="0 0 24 24" aria-hidden="true">${HISTORY_ICONS[action]||''}</svg>`;
  btn.addEventListener('click',()=>action==='cancelar'?openCancel(group.lot,group.folios):runLotOperation(action,group.lot));
  return btn;
 }
