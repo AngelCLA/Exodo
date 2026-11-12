@@ -38,7 +38,8 @@ async function selectFile(file){
  }
  updateFileInfo();
 }
-function setTab(next){tab=next;selectedFile=null;batchFiles=null;cancelTarget=null;cancelTrigger=null;setFormAlert('');closeCancelModal({restoreFocus:false});
+function updateSubmitHint(){const el=$('submitHint');if(!el)return;el.hidden=tab==='historial'||tab==='informacion'||!!unlockedCredentials}
+function setTab(next,{moveFocus=false}={}){tab=next;selectedFile=null;batchFiles=null;cancelTarget=null;cancelTrigger=null;setFormAlert('');closeCancelModal({restoreFocus:false});
  const isInformacion=tab==='informacion';
  document.querySelectorAll('.nav').forEach(b=>{const on=b.dataset.tab===tab;b.classList.toggle('active',on);if(on)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
  $('title').textContent=OPS[tab].title;$('submit').textContent=OPS[tab].label;
@@ -119,6 +120,9 @@ function setTab(next){tab=next;selectedFile=null;batchFiles=null;cancelTarget=nu
  if(tab==='historial')renderHistory()
  if(isInformacion){$('saveInstitution').addEventListener('click',saveInstitution);$('resetInstitution').addEventListener('click',resetInstitution);renderInstitutionSettings()}
  $('submit').disabled=!unlockedCredentials&&tab!=='historial';$('preview').disabled=!unlockedCredentials&&tab!=='historial';
+ updateSubmitHint();
+ document.title=(tab==='carga'?'Cargar título electrónico':OPS[tab].title)+' · Éxodo';
+ if(moveFocus)$('title').focus();
 }
 async function fileBase64(file){const bytes=new Uint8Array(await file.arrayBuffer());let b='';// Use chunks to avoid maximum argument-size issues.
  for(let i=0;i<bytes.length;i+=8192)b+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(b)}
@@ -157,7 +161,19 @@ async function buildRequest(){const usuario=unlockedCredentials?.usuario, passwo
 }
 function status(s){$('status').textContent=s}
 function setSummary(message){const el=$('summary');el.textContent=message;el.hidden=!message}
-function resultsPlaceholder(){const el=$('results');el.replaceChildren();const p=document.createElement('div');p.className='results-empty';p.textContent='Aquí aparecerá la tabla de resultados del lote.';el.append(p)}
+function resultsPlaceholder(){const el=$('results');el.removeAttribute('aria-busy');el.replaceChildren();const p=document.createElement('div');p.className='results-empty';p.textContent='Aquí aparecerá la tabla de resultados del lote.';el.append(p)}
+function showSkeletons(){
+ const el=$('results');
+ el.replaceChildren();
+ el.setAttribute('aria-busy','true');
+ const box=document.createElement('div');
+ box.className='results-skeleton';
+ box.setAttribute('aria-hidden','true');
+ const rows=Array.from({length:4},()=>'<div class="skeleton-row"><span></span><span></span><span></span><span></span></div>').join('');
+ box.innerHTML=`<div class="skeleton-line skeleton-title"></div><div class="skeleton-line skeleton-subtitle"></div>${rows}`;
+ el.append(box);
+}
+function clearSkeletons(){if($('results').getAttribute('aria-busy')==='true')resultsPlaceholder()}
 function resetDownloads(){lastResponse='';lastPayload=null;currentResults=[];resultsPlaceholder();$('downloadResponse').disabled=true;$('downloadPayload').disabled=true;}
 function extractPayload(xml){
  try {const d=parseXML(xml);for(const el of d.getElementsByTagName('*')){
@@ -402,13 +418,13 @@ async function readExcelFromZip(bytes){
  throw Error('El ZIP no contiene un libro Excel (.xls o .xlsx) reconocible.');
 }
 function showResults(results){
- const el=$('results');el.replaceChildren();if(!results.length){el.textContent='El Excel no contiene registros.';return}
+ const el=$('results');el.removeAttribute('aria-busy');el.replaceChildren();if(!results.length){el.textContent='El Excel no contiene registros.';return}
  const title=document.createElement('strong');title.textContent=`Resultados por título: ${results.length} · Correctos: ${results.filter(r=>r.estatus==='1').length} · Errores: ${results.filter(r=>r.estatus==='2').length}`;el.append(title);
  const table=document.createElement('table');table.className='results-table';const head=document.createElement('thead');const tr=document.createElement('tr');for(const name of ['Archivo','Estatus','Descripción','Folio control']){const th=document.createElement('th');th.textContent=name;tr.append(th)}head.append(tr);table.append(head);
   const body=document.createElement('tbody');for(const r of results.slice(0,2000)){const tr=document.createElement('tr');const cells=[r.archivo,r.estatus==='1'?'1 · Correcto':r.estatus==='2'?'2 · Error':r.estatus,r.descripcion,r.folio];cells.forEach((val,i)=>{const td=document.createElement('td');if(i===1){if(r.estatus==='1')td.className='cell-ok';else if(r.estatus==='2')td.className='cell-error'}td.textContent=String(val);tr.append(td)});body.append(tr)}table.append(body);el.append(table);
 }
 function showBatchResults(rows){
- const el=$('results');el.replaceChildren();
+ const el=$('results');el.removeAttribute('aria-busy');el.replaceChildren();
  if(!rows.length){resultsPlaceholder();return}
  const sent=rows.filter(r=>r.sent&&r.ok).length,uncertain=rows.filter(r=>r.uncertain).length;
  const title=document.createElement('strong');title.textContent=`XML procesados: ${rows.length} · Enviados: ${sent} · Con error: ${rows.length-sent-uncertain}${uncertain?` · Inciertos: ${uncertain}`:''}`;el.append(title);
@@ -463,7 +479,7 @@ async function showServiceResponse(type,response){
  lastPayload=extractPayload(response.xml);$('downloadPayload').disabled=!lastPayload;
  if(!lastPayload)return null;
  try{return await readExcelFromZip(lastPayload.bytes)}
- catch(e){$('results').textContent='ZIP detectado. '+e.message+' Puedes descargar el ZIP original.';return null}
+ catch(e){$('results').removeAttribute('aria-busy');$('results').textContent='ZIP detectado. '+e.message+' Puedes descargar el ZIP original.';return null}
 }
 async function dispatchSoap(xml){
  const response=await chrome.runtime.sendMessage({type:'SOAP',endpoint:ENDPOINT,xml});
@@ -516,7 +532,7 @@ async function sendBatch(){
   if(lastResponse)$('downloadResponse').disabled=false;
   selectedFile=null;batchFiles=null;updateFileInfo();
  }catch(e){status('No se envió');setSummary(e.message);setFormAlert(e.message)}
- finally{sending=false;$('submit').classList.remove('loading');$('submit').disabled=!unlockedCredentials;$('preview').disabled=!unlockedCredentials;$('responseTitle').closest('.panel').removeAttribute('aria-busy')}
+ finally{sending=false;$('submit').classList.remove('loading');$('submit').disabled=!unlockedCredentials;$('preview').disabled=!unlockedCredentials;$('responseTitle').closest('.panel').removeAttribute('aria-busy');clearSkeletons()}
 }
 async function send(){if(tab==='historial'||vaultBusy||sending)return;
  if(tab==='carga'&&batchFiles)return sendBatch();
@@ -525,7 +541,7 @@ async function send(){if(tab==='historial'||vaultBusy||sending)return;
   setFormAlert('');
   const req=await buildRequest();$('request').textContent=req.safe;
   if(['cancela','institucion'].includes(tab)&&!confirm(`Vas a ejecutar una CANCELACIÓN REAL en la SEP.\n\nFolio: ${req.reference.folio}\n\n¿Confirmas continuar?`))return;
-  $('submit').disabled=true;$('submit').classList.add('loading');$('preview').disabled=true;$('responseTitle').closest('.panel').setAttribute('aria-busy','true');status('Enviando solicitud…');setSummary('');resetDownloads();
+  $('submit').disabled=true;$('submit').classList.add('loading');$('preview').disabled=true;$('responseTitle').closest('.panel').setAttribute('aria-busy','true');status('Enviando solicitud…');setSummary('');resetDownloads();showSkeletons();
   dispatched=true;
   const response=await chrome.runtime.sendMessage({type:'SOAP',endpoint:ENDPOINT,xml:req.xml});
   if(response?.uncertain)throw Error(response.error||'No se pudo confirmar el resultado del envío.');
@@ -541,7 +557,7 @@ async function send(){if(tab==='historial'||vaultBusy||sending)return;
   const record={id:crypto.randomUUID(),timestamp:new Date().toISOString(),type:tab,lot:lot||req.reference.lot||'',filename:req.reference.filename||'',folio:req.reference.folio||'',httpStatus:response.status||null,code,msg:msg||fault||'',response:'',results:currentResults.map(r=>({archivo:r.archivo,estatus:r.estatus,descripcion:r.descripcion,folio:r.folio})),error:response.error||''};
   try{await saveRecord(record)}catch(e){setSummary(`${summary}\nAviso: no se pudo guardar el historial (${e.message}). La respuesta recibida se conserva en esta pantalla.`);setFormAlert('La respuesta se recibió, pero no se pudo guardar el historial.','info')}
  }catch(e){if(!dispatched){status('No se envió');setSummary(e.message);setFormAlert(e.message)}else if(!received){const message=`No se pudo confirmar el resultado del envío. Consulta la SEP antes de reintentar; no hay reintento automático. Detalle: ${e.message}`;status('Resultado incierto');setSummary(message);setFormAlert(message,'info')}else{status('Respuesta recibida');setSummary(e.message);setFormAlert(e.message,'info')}}
- finally{sending=false;$('submit').classList.remove('loading');$('submit').disabled=!unlockedCredentials;$('preview').disabled=!unlockedCredentials;$('responseTitle').closest('.panel').removeAttribute('aria-busy')}
+ finally{sending=false;$('submit').classList.remove('loading');$('submit').disabled=!unlockedCredentials;$('preview').disabled=!unlockedCredentials;$('responseTitle').closest('.panel').removeAttribute('aria-busy');clearSkeletons()}
 }
 function download(data,name,type='text/xml'){const url=URL.createObjectURL(new Blob([data],{type}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),5000)}
 const TYPE_LABEL={carga:'Carga',consulta:'Consulta',descarga:'Descarga',cancela:'Cancelación',institucion:'Cancelación por institución'};
@@ -569,8 +585,8 @@ const HISTORY_ICONS={
 };
 function historyActionButton(label,action,group){
  const btn=document.createElement('button');btn.type='button';btn.className='secondary history-action';btn.dataset.action=action;btn.dataset.lot=group.lot;
- btn.setAttribute('aria-label',label);btn.title=label;
- btn.innerHTML=`<svg viewBox="0 0 24 24" aria-hidden="true">${HISTORY_ICONS[action]||''}</svg>`;
+ btn.title=label;
+ btn.innerHTML=`<svg viewBox="0 0 24 24" aria-hidden="true">${HISTORY_ICONS[action]||''}</svg><span>${esc(label)}</span>`;
  btn.addEventListener('click',()=>action==='cancelar'?openCancel(group.lot,group.folios,btn):runLotOperation(action,group.lot));
  return btn;
 }
@@ -613,6 +629,7 @@ function renderOtherOperations(records){
  }
  return wrap;
 }
+function setBackgroundInert(on){for(const el of document.querySelectorAll('header, .shell'))try{el.inert=on}catch(e){}}
 function openCancel(lot,folios,trigger){
  cancelTarget={lot:String(lot),folio:folios.length===1?folios[0]:'',folios:folios.slice()};
  cancelTrigger=trigger||null;
@@ -622,20 +639,31 @@ function openCancel(lot,folios,trigger){
  $('historyMotivo').value='';
  $('historyCancelStatus').textContent='';
  $('cancelModal').hidden=false;
+ setBackgroundInert(true);
  $('historyFolio').focus();
 }
 function closeCancelModal({restoreFocus=true}={}){
  const trigger=cancelTrigger;
  cancelTarget=null;cancelTrigger=null;
  $('cancelModal').hidden=true;
+ setBackgroundInert(false);
  $('historyCancelStatus').textContent='';
  if(restoreFocus&&trigger)trigger.focus();
 }
+$('cancelModal').addEventListener('keydown',e=>{
+ if(e.key!=='Tab'||$('cancelModal').hidden)return;
+ const items=[...$('cancelModal').querySelectorAll('button, input')].filter(el=>!el.disabled&&!el.hidden);
+ if(!items.length)return;
+ const first=items[0],last=items[items.length-1];
+ if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}
+ else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}
+});
 $('historyCancelSubmit').addEventListener('click',()=>{if(cancelTarget)submitCancel(cancelTarget)});
 $('historyCancelClose').addEventListener('click',()=>closeCancelModal());
 $('cancelModalDismiss').addEventListener('click',()=>closeCancelModal());
 $('cancelModalBackdrop').addEventListener('click',()=>closeCancelModal());
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('cancelModal').hidden)closeCancelModal()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('cancelModal').hidden&&!$('vaultPanel').hidden)setVaultExpanded(false)});
 $('cancelModal').hidden=true;
 async function runLotOperation(type,lot){
  if(historyBusy){status('Hay una operación en curso; espera a que termine.');return}
@@ -644,7 +672,7 @@ async function runLotOperation(type,lot){
  if(!/^\d+$/.test(value)){setSummary('El número de lote debe ser un entero positivo.');status('No se envió');return}
  historyBusy=true;let dispatched=false;
  try{
-  cancelTarget=null;setFormAlert('');resetDownloads();setSummary('');
+  cancelTarget=null;setFormAlert('');resetDownloads();showSkeletons();setSummary('');
   status(type==='consulta'?`Consultando el lote ${value}…`:`Descargando el lote ${value}…`);
   const {usuario,password}=credentialsOrThrow();
   const {xml,safe}=soapEnvelope(OPS[type].tag,node('numeroLote',value),usuario,password);
@@ -664,16 +692,15 @@ async function runLotOperation(type,lot){
   const message=dispatched?`No se pudo confirmar el resultado del envío. Consulta la SEP antes de reintentar; no hay reintento automático. Detalle: ${e.message}`:e.message;
   status(dispatched?'Resultado incierto':'No se envió');setSummary(message);
  }
- finally{historyBusy=false}
+ finally{historyBusy=false;clearSkeletons()}
 }
 async function submitCancel(target){
  if(historyBusy){const busy=$('historyCancelStatus');if(busy)busy.textContent='Hay una operación en curso; espera a que termine.';return}
  const folio=$('historyFolio')?.value?.trim()||'',motivo=$('historyMotivo')?.value?.trim()||'',feedback=$('historyCancelStatus');
  if(!folio||!motivo){if(feedback)feedback.textContent='Captura folio y motivo de cancelación.';return}
- if(!confirm(`Vas a ejecutar una CANCELACIÓN REAL en la SEP.\n\nFolio: ${folio}\nLote: ${target.lot}\n\n¿Confirmas continuar?`))return;
  historyBusy=true;let dispatched=false;
  try{
-  setFormAlert('');resetDownloads();setSummary('');status(`Cancelando el folio ${folio}…`);
+  setFormAlert('');resetDownloads();showSkeletons();setSummary('');status(`Cancelando el folio ${folio}…`);
   const {usuario,password}=credentialsOrThrow();
   const {xml,safe}=soapEnvelope(OPS.cancela.tag,node('folioControl',folio)+node('motCancelacion',motivo),usuario,password);
   $('request').textContent=safe;
@@ -691,7 +718,7 @@ async function submitCancel(target){
   const message=dispatched?`No se pudo confirmar el resultado del envío. Consulta la SEP antes de reintentar; no hay reintento automático. Detalle: ${e.message}`:e.message;
   status(dispatched?'Resultado incierto':'No se envió');setSummary(message);
  }
- finally{historyBusy=false}
+ finally{historyBusy=false;clearSkeletons()}
 }
 async function renderHistory(){
  const el=$('history');if(!el)return;
@@ -723,11 +750,11 @@ function setSidebarCollapsed(collapsed,{persist=true,focusToggle=false}={}){
  if(persist&&!narrow){desktopSidebarCollapsed=collapsed;try{localStorage.setItem(SIDEBAR_KEY,collapsed?'1':'0')}catch(e){}}
  if(focusToggle)btn.focus();
 }
-document.querySelectorAll('.nav').forEach(b=>{const label=b.textContent.trim();b.setAttribute('aria-label',label);b.title=label;b.addEventListener('click',()=>{setTab(b.dataset.tab);if(isNarrowSidebar())setSidebarCollapsed(true,{persist:false,focusToggle:true})})});
+document.querySelectorAll('.nav').forEach(b=>{const label=b.textContent.trim();b.setAttribute('aria-label',label);b.title=label;b.addEventListener('click',()=>{setTab(b.dataset.tab,{moveFocus:true});if(isNarrowSidebar())setSidebarCollapsed(true,{persist:false,focusToggle:true})})});
 $('sidebarToggle').addEventListener('click',()=>setSidebarCollapsed(!$('sidebar').classList.contains('collapsed'),{persist:!isNarrowSidebar()}));
 if(sidebarMedia?.addEventListener)sidebarMedia.addEventListener('change',event=>setSidebarCollapsed(event.matches?true:desktopSidebarCollapsed,{persist:false}));
 setSidebarCollapsed(isNarrowSidebar()?true:desktopSidebarCollapsed,{persist:false});
-document.addEventListener('keydown',e=>{if(e.key!=='Enter'||e.metaKey||e.ctrlKey||e.altKey)return;const t=e.target;if(!(t instanceof HTMLElement)||t.tagName==='BUTTON'||t.tagName==='TEXTAREA'||(t.tagName==='INPUT'&&t.type==='file')||t.id==='unlockMaster')return;if(t.closest('#vaultSetup')){e.preventDefault();if(!vaultBusy)$('saveVault').click();return}if(t.closest('#fields')&&unlockedCredentials&&tab!=='historial'){e.preventDefault();send()}});
+document.addEventListener('keydown',e=>{if(e.key!=='Enter'||e.metaKey||e.ctrlKey||e.altKey)return;const t=e.target;if(!(t instanceof HTMLElement)||t.tagName==='BUTTON'||t.tagName==='TEXTAREA'||(t.tagName==='INPUT'&&t.type==='file')||t.id==='unlockMaster')return;if(t.closest('#vaultSetup')){e.preventDefault();if(!vaultBusy)$('saveVault').click();return}if(t.closest('#cancelModal')){e.preventDefault();if(!historyBusy)$('historyCancelSubmit').click();return}if(t.closest('#fields')&&unlockedCredentials&&tab!=='historial'){e.preventDefault();send()}});
 setTab('carga');
 loadInstitutionDisplay();
 resultsPlaceholder();
@@ -772,6 +799,7 @@ async function vaultState(){
  }
  $('submit').disabled=!unlockedCredentials&&tab!=='historial';
  $('preview').disabled=!unlockedCredentials&&tab!=='historial';
+ updateSubmitHint();
  return vault;
 }
 async function vaultOp(fn){if(vaultBusy)return;vaultBusy=true;vaultMessage('Procesando…');try{await fn()}catch(e){vaultMessage(e instanceof DOMException&&e.name==='OperationError'?'Contraseña maestra incorrecta o datos cifrados dañados.':e.message||'Error inesperado')}finally{vaultBusy=false;await vaultState()}}

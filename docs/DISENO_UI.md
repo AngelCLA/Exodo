@@ -151,6 +151,7 @@ header.topbar
 #### Panel de respuesta
 
 - `#results` contiene un placeholder `.results-empty` mientras no hay tabla. Al llegar resultados, `showResults()` lo reemplaza.
+- Mientras hay una solicitud en curso, `#results` muestra `.results-skeleton`: una línea de título, una subtítulo y cuatro filas con la misma rejilla de columnas que la tabla real, animadas con `skeleton-shimmer`. El contenedor recibe `aria-busy="true"` y el skeleton es `aria-hidden`; al terminar, la tabla, el mensaje o el placeholder lo reemplazan. Con `prefers-reduced-motion: reduce` la animación se desactiva.
 - `.response-footer` evita que los detalles y las descargas se separen del borde inferior en pantallas altas.
 - Si la tabla es más alta que el área disponible, la página desplaza; el pie permanece después del contenido.
 

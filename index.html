@@ -4,16 +4,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#061856">
+  <meta name="theme-color" content="#ffffff">
   <title>Éxodo</title>
   <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
+  <a class="skip-link" href="#main">Saltar al contenido</a>
   <header class="topbar">
     <div id="vaultScrim" class="vault-scrim" hidden></div>
     <div class="title-block">
-      <h1 id="title">Cargar título electrónico</h1>
+      <h1 id="title" tabindex="-1">Cargar título electrónico</h1>
       <p id="subtitle">Gestión abierta de títulos electrónicos ante la SEP</p>
     </div>
     <div class="header-tools">
@@ -147,10 +148,8 @@
           <span>Historial de lotes</span>
         </button>
         <button class="nav" data-tab="informacion" type="button">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-            class="icon icon-tabler icons-tabler-outline icon-tabler-settings">
-            <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path
               d="M10.325 4.317c.426 -1.756 2.924 -1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543 -.94 3.31 .826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756 .426 1.756 2.924 0 3.35a1.724 1.724 0 0 0 -1.066 2.573c.94 1.543 -.826 3.31 -2.37 2.37a1.724 1.724 0 0 0 -2.572 1.065c-.426 1.756 -2.924 1.756 -3.35 0a1.724 1.724 0 0 0 -2.573 -1.066c-1.543 .94 -3.31 -.826 -2.37 -2.37a1.724 1.724 0 0 0 -1.065 -2.572c-1.756 -.426 -1.756 -2.924 0 -3.35a1.724 1.724 0 0 0 1.066 -2.573c-.94 -1.543 .826 -3.31 2.37 -2.37c1 .608 2.296 .07 2.572 -1.065" />
             <path d="M9 12a3 3 0 1 0 6 0a3 3 0 0 0 -6 0" />
@@ -167,7 +166,7 @@
       </div>
     </aside>
 
-    <main>
+    <main id="main">
       <div class="columns">
         <section class="panel main-panel" aria-labelledby="title">
           <div id="fields"></div>
@@ -177,6 +176,7 @@
             <button id="preview" class="secondary" type="button">Ver solicitud SOAP</button>
             <button id="submit" class="primary" type="button">Enviar a SEP</button>
           </div>
+          <p id="submitHint" class="hint" hidden>Desbloquea el acceso institucional para enviar la solicitud.</p>
         </section>
 
         <section class="panel response-panel" aria-labelledby="responseTitle">
@@ -213,7 +213,13 @@
     <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="cancelModalTitle">
       <div class="modal-head">
         <h2 id="cancelModalTitle">Cancelar título</h2>
-        <button id="cancelModalDismiss" class="modal-close" type="button" aria-label="Cerrar">✕</button>
+        <button id="cancelModalDismiss" class="modal-close" type="button" aria-label="Cerrar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+            stroke-linejoin="round" aria-hidden="true">
+            <path d="M18 6 6 18" />
+            <path d="m6 6 12 12" />
+          </svg>
+        </button>
       </div>
       <p id="cancelModalHint" class="hint"></p>
       <label>Folio de control<input id="historyFolio" autocomplete="off" placeholder="Folio del título"></label>

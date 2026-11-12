@@ -34,7 +34,7 @@ function page({response,sendError,storageSetError=false,confirm=true,deferred=fa
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
 async function ready(p){await settle();for(const [id,value] of Object.entries({setupUser:'u',setupPassword:'p',setupMaster:'master-test-123',setupMasterRepeat:'master-test-123'}))p.el(id).value=value;await p.el('saveVault').click();await settle()}
 async function sendIn(p,tab='consulta'){p.nav(tab).fire('click');await settle();if(tab==='consulta'||tab==='descarga')p.el('numeroLote').value='123';await p.el('submit').click();await settle()}
-function assertReset(p){assert.equal(p.el('submit').disabled,false);assert.equal(p.el('preview').disabled,false);assert.equal(p.el('submit').classList.contains('loading'),false);assert.equal(p.el('responseTitle').closest().getAttribute('aria-busy'),undefined)}
+function assertReset(p){assert.equal(p.el('submit').disabled,false);assert.equal(p.el('preview').disabled,false);assert.equal(p.el('submit').classList.contains('loading'),false);assert.equal(p.el('responseTitle').closest().getAttribute('aria-busy'),undefined);assert.notEqual(p.el('results').getAttribute('aria-busy'),'true')}
 
 for(const malformed of [undefined,null,{},'not-a-worker-reply'])test(`malformed worker reply ${String(malformed)}`,async()=>{
  const p=page({response:malformed});await ready(p);const before=p.snapshot();await sendIn(p);
@@ -55,6 +55,16 @@ test('in-flight send stays busy and suppresses duplicate dispatch',async()=>{
  const p=page({response:{ok:true,status:200,ms:1,xml:'<respuesta/>'},deferred:true});await ready(p);p.nav('consulta').fire('click');await settle();p.el('numeroLote').value='123';const first=p.el('submit').click();await settle();
  assert.equal(p.sends,1);assert.equal(p.el('submit').disabled,true);assert.equal(p.el('submit').classList.contains('loading'),true);assert.equal(p.el('responseTitle').closest().getAttribute('aria-busy'),'true');await p.el('submit').click();assert.equal(p.sends,1);
  p.release();await first;await settle();assertReset(p);
+});
+
+test('in-flight send shows skeleton results until the response arrives',async()=>{
+ const xml='<respuesta><numeroLote>123</numeroLote></respuesta>';
+ const p=page({response:{ok:true,status:200,ms:1,xml},deferred:true});await ready(p);
+ p.nav('consulta').fire('click');await settle();p.el('numeroLote').value='123';
+ const first=p.el('submit').click();await settle();
+ assert.equal(p.el('results').getAttribute('aria-busy'),'true','skeleton announces the pending response');
+ p.release();await first;await settle();
+ assert.notEqual(p.el('results').getAttribute('aria-busy'),'true','results replace the skeleton');
 });
 
 test('declined cancellation does not dispatch for either cancellation form',async()=>{

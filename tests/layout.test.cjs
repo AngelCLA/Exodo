@@ -43,3 +43,12 @@ test('desktop guidance describes fixed sidebar and preserved page reachability',
   assert.match(design, /sidebar fija al viewport/i);
   assert.match(design, /El contenido crece si hace falta y la página desplaza/);
 });
+
+test('loading results use an animated skeleton that respects reduced motion', () => {
+  assert.match(css, /\.results-skeleton\s*\{/);
+  assert.match(css, /\.skeleton-row\s*\{[\s\S]*?grid-template-columns:/);
+  assert.match(css, /animation:\s*skeleton-shimmer/);
+  assert.match(css, /@keyframes skeleton-shimmer/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?animation:\s*none/);
+  assert.match(design, /`.results-skeleton`/);
+});

@@ -14,7 +14,7 @@ function page(){
   const listeners={},classes=new Set();
   return {id,hidden:false,disabled:false,dataset:{},value:'',textContent:'',
    classList:{add:c=>classes.add(c),remove:c=>classes.delete(c),contains:c=>classes.has(c),toggle(c,on){if(on)classes.add(c);else classes.delete(c)}},
-   setAttribute(k,v){this[k]=v},removeAttribute(k){delete this[k]},
+   setAttribute(k,v){this[k]=v},removeAttribute(k){delete this[k]},getAttribute(k){return this[k]},
    addEventListener(k,fn){listeners[k]=fn},
    async click(){if(!this.disabled)return listeners.click?.({target:this})},
    fire(k,extra={}){return listeners[k]?.({target:this,preventDefault(){},...extra})},

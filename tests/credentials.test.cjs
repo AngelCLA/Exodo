@@ -42,7 +42,7 @@ test('credentials live in the header, not in an operation, with one encryption n
  const header=html.match(/<header\b[\s\S]*?<\/header>/)[0];
  assert.match(header,/id="vaultPanel"/);
  assert.match(header,/id="lockVault"/);
- assert.doesNotMatch(html.match(/<main>[\s\S]*?<\/main>/)[0],/class="credentials"/);
+  assert.doesNotMatch(html.match(/<main\b[\s\S]*?<\/main>/)[0],/class="credentials"/);
  assert.equal((html.match(/cifrad[ao]s?/gi)||[]).length,1);
 });
 

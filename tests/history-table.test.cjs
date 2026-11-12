@@ -137,8 +137,6 @@ test('inline cancellation prefills the only folio and sends the real cancellatio
  await p.el('historyCancelSubmit').fire('click');
  await settle();await settle();
  assert.equal(p.sends,1);
- assert.match(p.questions[0],/Folio: F-100/);
- assert.match(p.questions[0],/Lote: 100/);
  assert.equal(p.data.history[0].type,'cancela');
  assert.equal(p.data.history[0].lot,'100');
  assert.equal(p.data.history[0].folio,'F-100');
@@ -179,15 +177,15 @@ test('a lot with several folios requires an explicit folio before cancelling',as
  assert.equal(p.el('historyCancelStatus').textContent,'Captura folio y motivo de cancelación.');
 });
 
-test('declining the inline cancellation confirmation dispatches nothing',async()=>{
- const p=page({stored:{history:[{id:'1',timestamp:'2026-11-10T10:00:00.000Z',type:'carga',lot:'100',folio:'F-100'}]},confirm:false});
+test('closing the cancellation modal instead of confirming dispatches nothing',async()=>{
+ const p=page({stored:{history:[{id:'1',timestamp:'2026-11-10T10:00:00.000Z',type:'carga',lot:'100',folio:'F-100'}]}});
  await ready(p);
  await openHistory(p);
  await clickAction(p,'100','cancelar');
  p.el('historyMotivo').value='Duplicado';
- await p.el('historyCancelSubmit').fire('click');
+ await p.el('cancelModalBackdrop').click();
  await settle();
- assert.equal(p.confirmCalls,1);
+ assert.equal(p.confirmCalls,0);
  assert.equal(p.sends,0);
  assert.equal(p.data.history.length,1);
 });

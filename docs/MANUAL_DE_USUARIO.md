@@ -186,6 +186,7 @@ El panel de respuesta muestra:
 
 ### Estados del envío
 
+- **Esperando respuesta:** mientras la solicitud está en curso, el área de resultados muestra filas de carga animadas (skeleton) y el panel queda marcado como ocupado (`aria-busy`); al llegar la respuesta, la animación se reemplaza por la tabla o el mensaje correspondiente.
 - **No se envió:** una validación local rechazó los datos antes de despachar la solicitud.
 - **Estado HTTP:** aparece cuando se recibió una respuesta HTTP; se conserva el XML aunque HTTP sea un error o contenga un SOAP Fault. Revisa el XML y el mensaje del servicio.
 - Si rechazas la confirmación de cualquiera de las cancelaciones, la operación termina sin red ni historial y el estado visible permanece sin cambios; no se muestra un nuevo mensaje literal de estado.
