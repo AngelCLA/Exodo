@@ -53,7 +53,7 @@ Después sigue la [instalación](#instalación) y consulta el [manual de usuario
 
 ## Uso rápido
 
-1. **Configura la bóveda**: usuario y contraseña SEP + contraseña maestra de 12 caracteres o más.
+1. **Configura la bóveda**: usuario y contraseña SEP + contraseña maestra de 8 caracteres o más.
 2. **Desbloquea** la bóveda con la contraseña maestra.
 3. Elige una operación en la barra lateral.
 4. Completa los campos o selecciona el XML. Para cargar un título puedes elegir un `.xml` o un `.zip` con varios XML: el ZIP se descomprime en el navegador y **nunca se envía**, cada XML se envía en una solicitud SOAP independiente y genera su propio lote. Cada XML debe ser `.xml` y no superar el límite local inclusivo de 1 MiB (1.048.576 bytes); los mayores se rechazan antes de leerse o enviarse. Este límite no representa una política oficial de SEP.

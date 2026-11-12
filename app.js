@@ -13,7 +13,7 @@ const OPS={
 };
 const INSTITUTION_KEY='institutionDisplayName';
 const MAX_INSTITUTION_NAME_LENGTH=120;
-let unlockedCredentials=null, vaultBusy=false, sending=false, historyBusy=false, cancelTarget=null;
+let unlockedCredentials=null, vaultBusy=false, sending=false, historyBusy=false, cancelTarget=null, cancelTrigger=null;
 let tab='carga', lastResponse='', lastFilename='respuesta.xml', lastPayload=null, selectedFile=null, batchFiles=null, currentResults=[];
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&apos;');
@@ -38,7 +38,7 @@ async function selectFile(file){
  }
  updateFileInfo();
 }
-function setTab(next){tab=next;selectedFile=null;batchFiles=null;cancelTarget=null;setFormAlert('');
+function setTab(next){tab=next;selectedFile=null;batchFiles=null;cancelTarget=null;cancelTrigger=null;setFormAlert('');closeCancelModal({restoreFocus:false});
  const isInformacion=tab==='informacion';
  document.querySelectorAll('.nav').forEach(b=>{const on=b.dataset.tab===tab;b.classList.toggle('active',on);if(on)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
  $('title').textContent=OPS[tab].title;$('submit').textContent=OPS[tab].label;
@@ -571,7 +571,7 @@ function historyActionButton(label,action,group){
  const btn=document.createElement('button');btn.type='button';btn.className='secondary history-action';btn.dataset.action=action;btn.dataset.lot=group.lot;
  btn.setAttribute('aria-label',label);btn.title=label;
  btn.innerHTML=`<svg viewBox="0 0 24 24" aria-hidden="true">${HISTORY_ICONS[action]||''}</svg>`;
- btn.addEventListener('click',()=>action==='cancelar'?openCancel(group.lot,group.folios):runLotOperation(action,group.lot));
+ btn.addEventListener('click',()=>action==='cancelar'?openCancel(group.lot,group.folios,btn):runLotOperation(action,group.lot));
  return btn;
 }
 function historyDateCell(value){
@@ -613,24 +613,30 @@ function renderOtherOperations(records){
  }
  return wrap;
 }
-function openCancel(lot,folios){
+function openCancel(lot,folios,trigger){
  cancelTarget={lot:String(lot),folio:folios.length===1?folios[0]:'',folios:folios.slice()};
- renderHistory();
-}
-function renderCancelForm(target){
- const el=$('history');if(!el)return;
- const box=document.createElement('div');box.className='history-cancel';
- box.innerHTML=`<strong>Cancelar título · lote ${esc(target.lot)}</strong>
-  <p class="hint">Operación real e irreversible en la SEP. ${target.folios.length>1?`Este lote tiene ${target.folios.length} folios registrados: confirma el folio correcto.`:'Confirma el folio antes de continuar.'}</p>
-  <label>Folio de control<input id="historyFolio" value="${esc(target.folio||'')}" autocomplete="off" placeholder="Folio del título"></label>
-  <label>Motivo de cancelación<input id="historyMotivo" autocomplete="off" placeholder="Motivo de la cancelación"></label>
-  <div class="history-cancel-actions"><button id="historyCancelSubmit" class="primary" type="button">Cancelar título</button><button id="historyCancelClose" class="secondary" type="button">Cerrar</button></div>
-  <p id="historyCancelStatus" class="hint" role="status" aria-live="polite"></p>`;
- el.append(box);
- $('historyCancelSubmit').addEventListener('click',()=>submitCancel(target));
- $('historyCancelClose').addEventListener('click',()=>{cancelTarget=null;renderHistory()});
+ cancelTrigger=trigger||null;
+ $('cancelModalTitle').textContent=`Cancelar título · lote ${cancelTarget.lot}`;
+ $('cancelModalHint').textContent=`Operación real e irreversible en la SEP. ${cancelTarget.folios.length>1?`Este lote tiene ${cancelTarget.folios.length} folios registrados: confirma el folio correcto.`:'Confirma el folio antes de continuar.'}`;
+ $('historyFolio').value=cancelTarget.folio||'';
+ $('historyMotivo').value='';
+ $('historyCancelStatus').textContent='';
+ $('cancelModal').hidden=false;
  $('historyFolio').focus();
 }
+function closeCancelModal({restoreFocus=true}={}){
+ const trigger=cancelTrigger;
+ cancelTarget=null;cancelTrigger=null;
+ $('cancelModal').hidden=true;
+ $('historyCancelStatus').textContent='';
+ if(restoreFocus&&trigger)trigger.focus();
+}
+$('historyCancelSubmit').addEventListener('click',()=>{if(cancelTarget)submitCancel(cancelTarget)});
+$('historyCancelClose').addEventListener('click',()=>closeCancelModal());
+$('cancelModalDismiss').addEventListener('click',()=>closeCancelModal());
+$('cancelModalBackdrop').addEventListener('click',()=>closeCancelModal());
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('cancelModal').hidden)closeCancelModal()});
+$('cancelModal').hidden=true;
 async function runLotOperation(type,lot){
  if(historyBusy){status('Hay una operación en curso; espera a que termine.');return}
  if(type!=='consulta'&&type!=='descarga')return;
@@ -680,7 +686,7 @@ async function submitCancel(target){
   setSummary(summary);
   const record={id:crypto.randomUUID(),timestamp:new Date().toISOString(),type:'cancela',lot:target.lot,filename:'',folio,httpStatus:response.status||null,code,msg:msg||fault||'',response:'',results:[],error:response.error||''};
   try{await saveRecord(record)}catch(e){setSummary(`${summary}\nAviso: no se pudo guardar el historial (${e.message}).`)}
-  cancelTarget=null;await renderHistory();
+  cancelTarget=null;closeCancelModal({restoreFocus:false});await renderHistory();
  }catch(e){
   const message=dispatched?`No se pudo confirmar el resultado del envío. Consulta la SEP antes de reintentar; no hay reintento automático. Detalle: ${e.message}`:e.message;
   status(dispatched?'Resultado incierto':'No se envió');setSummary(message);
@@ -694,12 +700,10 @@ async function renderHistory(){
  const groups=lotGroups(history);
  const others=history.filter(rec=>rec&&(!rec.lot||!['carga','consulta','descarga'].includes(rec.type)));
  const count=$('historyCount');
- if(count)count.textContent=history.length?`${groups.length} lote${groups.length===1?'':'s'} · ${history.length} movimiento${history.length===1?'':'s'}`:'Sin movimientos';
+ if(count)count.textContent=groups.length?`${groups.length} lote${groups.length===1?'':'s'}`:history.length?'Sin lotes':'Sin movimientos';
  if(!history.length){const empty=document.createElement('div');empty.className='empty-state';const strong=document.createElement('strong');strong.textContent='Sin movimientos todavía.';const p=document.createElement('p');p.textContent='Las operaciones que ejecutes aparecerán aquí y se guardan solo en este navegador.';empty.append(strong,p);el.append(empty);return}
- if(cancelTarget&&!groups.some(g=>g.lot===cancelTarget.lot))cancelTarget=null;
  if(groups.length)el.append(renderHistoryTable(groups));
  else{const note=document.createElement('p');note.className='hint';note.textContent='Todavía no hay lotes. Carga un título para crear el primero.';el.append(note)}
- if(cancelTarget)renderCancelForm(cancelTarget);
  if(others.length)el.append(renderOtherOperations(others));
 }
 $('submit').addEventListener('click',send);
@@ -742,9 +746,11 @@ function setVaultExpanded(expanded){
  const panel=$('vaultPanel');
  if(!expanded&&panel.contains(document.activeElement))$('vaultToggle').focus();
  panel.hidden=!expanded;
+ $('vaultScrim').hidden=!expanded;
  $('vaultToggle').setAttribute('aria-expanded',String(expanded));
 }
 $('vaultToggle').addEventListener('click',()=>setVaultExpanded($('vaultPanel').hidden));
+$('vaultScrim').addEventListener('click',()=>setVaultExpanded(false));
 async function vaultState(){
  const vault=(await chrome.storage.local.get(VAULT_KEY))[VAULT_KEY];
  const state=unlockedCredentials?'ready':vault?'locked':'setup';
@@ -769,7 +775,7 @@ async function vaultState(){
  return vault;
 }
 async function vaultOp(fn){if(vaultBusy)return;vaultBusy=true;vaultMessage('Procesando…');try{await fn()}catch(e){vaultMessage(e instanceof DOMException&&e.name==='OperationError'?'Contraseña maestra incorrecta o datos cifrados dañados.':e.message||'Error inesperado')}finally{vaultBusy=false;await vaultState()}}
-$('saveVault').addEventListener('click',()=>vaultOp(async()=>{const usuario=$('setupUser').value.trim(),password=$('setupPassword').value,master=$('setupMaster').value,repeat=$('setupMasterRepeat').value;if(!usuario||!password)throw Error('Completa usuario y contraseña de SEP.');if(master.length<12)throw Error('La contraseña maestra debe tener al menos 12 caracteres.');if(master!==repeat)throw Error('Las contraseñas maestras no coinciden.');if((await chrome.storage.local.get(VAULT_KEY))[VAULT_KEY])throw Error('Ya existe una bóveda.');const encrypted=await encryptCredentials({usuario,password},master);await chrome.storage.local.set({[VAULT_KEY]:encrypted});unlockedCredentials={usuario,password};wipeCredentialFields();vaultMessage('Credenciales cifradas y guardadas. No olvides tu contraseña maestra: no se puede recuperar.')}));
+$('saveVault').addEventListener('click',()=>vaultOp(async()=>{const usuario=$('setupUser').value.trim(),password=$('setupPassword').value,master=$('setupMaster').value,repeat=$('setupMasterRepeat').value;if(!usuario||!password)throw Error('Completa usuario y contraseña de SEP.');if(master.length<8)throw Error('La contraseña maestra debe tener al menos 8 caracteres.');if(master!==repeat)throw Error('Las contraseñas maestras no coinciden.');if((await chrome.storage.local.get(VAULT_KEY))[VAULT_KEY])throw Error('Ya existe una bóveda.');const encrypted=await encryptCredentials({usuario,password},master);await chrome.storage.local.set({[VAULT_KEY]:encrypted});unlockedCredentials={usuario,password};wipeCredentialFields();vaultMessage('Credenciales cifradas y guardadas. No olvides tu contraseña maestra: no se puede recuperar.')}));
 $('unlockVault').addEventListener('click',()=>vaultOp(async()=>{const master=$('unlockMaster').value;if(!master)throw Error('Introduce tu contraseña maestra.');const vault=(await chrome.storage.local.get(VAULT_KEY))[VAULT_KEY];if(!vault)throw Error('No hay credenciales guardadas.');unlockedCredentials=await decryptCredentials(vault,master);wipeCredentialFields();vaultMessage('Credenciales desbloqueadas en esta pestaña.')}));
 $('unlockMaster').addEventListener('keydown',e=>{if(e.key==='Enter')$('unlockVault').click()});
 $('lockVault').addEventListener('click',async()=>{unlockedCredentials=null;wipeCredentialFields();vaultMessage('Sesión bloqueada.');await vaultState()});

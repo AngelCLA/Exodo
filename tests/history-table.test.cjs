@@ -68,7 +68,7 @@ test('history groups records by lot with creation, query and download dates',asy
  const p=page({stored:{history}});
  await ready(p);
  await openHistory(p);
- assert.equal(p.el('historyCount').textContent,'2 lotes · 5 movimientos');
+ assert.equal(p.el('historyCount').textContent,'2 lotes');
  const rows=tableRows(p);
  assert.equal(rows.length,2);
  assert.equal(rows[0].children[0].textContent,'200');
@@ -145,6 +145,25 @@ test('inline cancellation prefills the only folio and sends the real cancellatio
  assert.match(p.el('summary').textContent,/^Cancelación · lote 100 · folio F-100:/);
 });
 
+test('cancellation opens a modal dialog instead of a block below the table',async()=>{
+ const p=page({stored:{history:[{id:'1',timestamp:'2026-11-10T10:00:00.000Z',type:'carga',lot:'100',folio:'F-100'}]}});
+ await ready(p);
+ await openHistory(p);
+ assert.equal(p.el('cancelModal').hidden,true);
+ await clickAction(p,'100','cancelar');
+ assert.equal(p.el('cancelModal').hidden,false);
+ assert.match(p.el('cancelModalTitle').textContent,/lote 100/);
+ assert.equal(p.el('historyFolio').value,'F-100');
+ await p.el('cancelModalDismiss').click();
+ assert.equal(p.el('cancelModal').hidden,true);
+ await clickAction(p,'100','cancelar');
+ p.el('historyMotivo').value='Motivo pendiente';
+ await p.el('cancelModalBackdrop').click();
+ assert.equal(p.el('cancelModal').hidden,true);
+ await clickAction(p,'100','cancelar');
+ assert.equal(p.el('historyMotivo').value,'','reopening starts clean');
+});
+
 test('a lot with several folios requires an explicit folio before cancelling',async()=>{
  const p=page({stored:{history:[
   {id:'1',timestamp:'2026-11-10T10:00:00.000Z',type:'carga',lot:'100',folio:'F-100'},
@@ -154,7 +173,7 @@ test('a lot with several folios requires an explicit folio before cancelling',as
  await openHistory(p);
  await clickAction(p,'100','cancelar');
  assert.equal(p.el('historyFolio').value,'');
- assert.ok(p.created.some(e=>String(e.markup||'').includes('2 folios')),'form explains the ambiguity');
+ assert.match(p.el('cancelModalHint').textContent,/2 folios/,'form explains the ambiguity');
  await p.el('historyCancelSubmit').fire('click');
  assert.equal(p.sends,0);
  assert.equal(p.el('historyCancelStatus').textContent,'Captura folio y motivo de cancelación.');

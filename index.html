@@ -11,6 +11,7 @@
 
 <body>
   <header class="topbar">
+    <div id="vaultScrim" class="vault-scrim" hidden></div>
     <div class="title-block">
       <h1 id="title">Cargar título electrónico</h1>
       <p id="subtitle">Gestión abierta de títulos electrónicos ante la SEP</p>
@@ -41,7 +42,7 @@
         </div>
         <div class="two">
           <label>Contraseña maestra
-            <input id="setupMaster" type="password" autocomplete="new-password" placeholder="Mínimo 12 caracteres">
+            <input id="setupMaster" type="password" autocomplete="new-password" placeholder="Mínimo 8 caracteres">
           </label>
           <label>Confirmar contraseña maestra
             <input id="setupMasterRepeat" type="password" autocomplete="new-password" placeholder="Repetir contraseña">
@@ -205,6 +206,24 @@
         </section>
       </div>
     </main>
+  </div>
+
+  <div id="cancelModal" class="modal" hidden>
+    <div id="cancelModalBackdrop" class="modal-backdrop"></div>
+    <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="cancelModalTitle">
+      <div class="modal-head">
+        <h2 id="cancelModalTitle">Cancelar título</h2>
+        <button id="cancelModalDismiss" class="modal-close" type="button" aria-label="Cerrar">✕</button>
+      </div>
+      <p id="cancelModalHint" class="hint"></p>
+      <label>Folio de control<input id="historyFolio" autocomplete="off" placeholder="Folio del título"></label>
+      <label>Motivo de cancelación<input id="historyMotivo" autocomplete="off" placeholder="Motivo de la cancelación"></label>
+      <div class="history-cancel-actions">
+        <button id="historyCancelSubmit" class="primary" type="button">Cancelar título</button>
+        <button id="historyCancelClose" class="secondary" type="button">Cerrar</button>
+      </div>
+      <p id="historyCancelStatus" class="hint" role="status" aria-live="polite"></p>
+    </section>
   </div>
 
   <script src="app.js"></script>

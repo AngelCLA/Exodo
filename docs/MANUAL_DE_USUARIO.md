@@ -50,7 +50,7 @@ La primera vez que abras la extensión se abrirá el desplegable **Acceso instit
 
 1. Escribe tu **Usuario SEP**.
 2. Escribe tu **Contraseña SEP**.
-3. Crea una **Contraseña maestra** de al menos 12 caracteres.
+3. Crea una **Contraseña maestra** de al menos 8 caracteres.
 4. Repite la contraseña maestra en **Confirmar contraseña maestra**.
 5. Pulsa **Guardar y desbloquear**.
 
@@ -166,7 +166,7 @@ Si la respuesta contiene un ZIP en Base64, la extensión intentará leer el Exce
 3. Usa las acciones de cada fila:
    - **Consultar**: consulta ese lote de inmediato y actualiza la fecha de consulta. La respuesta aparece en el panel derecho.
    - **Descargar**: solicita la descarga del lote y actualiza su fecha. Si la respuesta trae un ZIP con Excel, la tabla de resultados aparece en el panel derecho, sin obligarte a descargar el archivo.
-   - **Cancelar**: abre un formulario en el mismo panel con folio y motivo. Si el lote tiene un solo folio registrado, se rellena automáticamente; si tiene varios, debes capturarlo. Después pide la confirmación habitual de cancelación real.
+   - **Cancelar**: abre una ventana modal con folio y motivo. Si el lote tiene un solo folio registrado, se rellena automáticamente; si tiene varios, debes capturarlo. Cierra la ventana con **Cerrar**, la ✕, un clic fuera o `Escape`. Después pide la confirmación habitual de cancelación real.
 4. Las operaciones sin número de lote, como las cancelaciones iniciadas desde su propio panel, aparecen en **Otras operaciones**, debajo de la tabla.
 
 Las acciones del historial no sustituyen los paneles de la barra lateral: si solo necesitas una operación, o prefieres capturarla a mano o previsualizar el XML antes de enviarlo, puedes seguir usando **Consultar lote**, **Descargar lote** y **Cancelar título** desde sus paneles.
@@ -258,7 +258,7 @@ Estados del badge:
 | `Captura folio y motivo de cancelación.` | Faltan campos de cancelación. | Completa folio y motivo. |
 | `Captura la clave de institución.` | Falta la clave de institución. | Completa el campo. |
 | `Contraseña maestra incorrecta o datos cifrados dañados.` | Contraseña incorrecta o bóveda dañada. | Reintenta; si olvidaste la contraseña, borra la bóveda. |
-| `La contraseña maestra debe tener al menos 12 caracteres.` | La contraseña es demasiado corta. | Usa 12 caracteres o más. |
+| `La contraseña maestra debe tener al menos 8 caracteres.` | La contraseña es demasiado corta. | Usa 8 caracteres o más. |
 | `Las contraseñas maestras no coinciden.` | La confirmación es distinta. | Repite la misma contraseña. |
 | `Completa usuario y contraseña de SEP.` | Campos vacíos al configurar. | Completa ambos campos. |
 | `No hay credenciales guardadas.` | No existe una bóveda. | Configura la bóveda. |

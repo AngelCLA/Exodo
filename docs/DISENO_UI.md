@@ -245,10 +245,11 @@ En **Cancelar título** y **Cancelar por institución**, sobre el formulario apa
 
 - Tabla por lote con columnas **Lote**, **Creación**, **Consulta**, **Descarga** y **Acciones**, dentro de `.history-table-wrap`, que conserva desplazamiento horizontal como respaldo. Las fechas se muestran en dos líneas (fecha y hora) para que las acciones quepan sin desplazamiento en el panel.
 - Reutiliza `.results-table` para encabezados fijos, bordes y hover; cada fecha usa `dd/mm/aa` y `HH:MM` en dos líneas, con `—` cuando no existe.
-- Las acciones son botones `.secondary.history-action` dentro de `.history-actions` (flex con salto de línea): **Consultar** y **Descargar** ejecutan la solicitud y muestran el resultado en el panel derecho; **Cancelar** abre el formulario `.history-cancel` con folio y motivo.
-- El formulario de cancelación reutiliza el borde de error y el aviso de operación irreversible; el folio se rellena solo cuando el lote tiene un único folio registrado.
+- Las acciones son botones `.secondary.history-action` dentro de `.history-actions` (flex con salto de línea): **Consultar** y **Descargar** ejecutan la solicitud y muestran el resultado en el panel derecho; **Cancelar** abre el modal de cancelación con folio y motivo.
+- El modal de cancelación (`#cancelModal`) es una capa fija con fondo oscurecido (`.modal-backdrop`) y panel centrado (`.modal-panel`, ancho máximo 440 px, borde de error). No desplaza la tabla ni el resto del historial: la acción queda en una ventana superpuesta, se cierra con el botón **Cerrar**, la ✕, el fondo o `Escape`, y devuelve el foco al botón **Cancelar** que lo abrió.
+- El modal reutiliza el borde de error y el aviso de operación irreversible; el folio se rellena solo cuando el lote tiene un único folio registrado, y el motivo se limpia en cada apertura. Usa `role="dialog"` y `aria-modal="true"`.
 - Los registros sin lote (cancelaciones manuales, envíos fallidos) se muestran en `.history-other` reutilizando `.history-row`, de modo que no desaparecen de la vista.
-- Barra superior `.history-toolbar` con el conteo (`X lotes · Y movimientos`). El historial no se puede vaciar desde la interfaz: no hay acción destructiva.
+- Barra superior `.history-toolbar` con el conteo de lotes (`X lotes`, sin contabilizar los movimientos). El historial no se puede vaciar desde la interfaz: no hay acción destructiva.
 
 ### Estados vacíos
 

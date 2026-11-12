@@ -101,3 +101,16 @@ test('secondary actions stay in the expanded panel and return to setup',async()=
   assert.deepEqual(p.data.history,[{lot:'123'}]);
  }
 });
+
+test('master password requires at least 8 characters',async()=>{
+ const p=page();await settle();
+ for(const [id,value] of Object.entries({setupUser:'operador',setupPassword:'sep-test',setupMaster:'1234567',setupMasterRepeat:'1234567'}))p.el(id).value=value;
+ await p.el('saveVault').click();
+ assert.equal(p.data.sepCredentialVaultV1,undefined);
+ assert.match(p.el('vaultFeedback').textContent,/al menos 8 caracteres/);
+ assert.equal(p.el('vaultPanel').hidden,false);
+ p.el('setupMaster').value='12345678';p.el('setupMasterRepeat').value='12345678';
+ await p.el('saveVault').click();
+ assert.ok(p.data.sepCredentialVaultV1.ciphertext);
+ assert.equal(p.el('vaultPanel').hidden,true);
+});
